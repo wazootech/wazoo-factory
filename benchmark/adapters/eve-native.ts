@@ -48,10 +48,14 @@ const CHECK_INPUT = z.object({
   command: z.string().describe("Shell command to run in the workspace."),
 });
 const READ_INPUT = z.object({
-  path: z.string().describe("Path of the file to read, relative to the workspace."),
+  path: z
+    .string()
+    .describe("Path of the file to read, relative to the workspace."),
 });
 const WRITE_INPUT = z.object({
-  path: z.string().describe("Path of the file to write, relative to the workspace."),
+  path: z
+    .string()
+    .describe("Path of the file to write, relative to the workspace."),
   content: z.string().describe("Exact text content to write to the file."),
 });
 
@@ -102,7 +106,9 @@ export class EveNativeExecutor implements Executor {
     });
 
     let text: string;
-    let usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | undefined;
+    let usage:
+      | { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+      | undefined;
     try {
       const result = await generateText({
         model: gateway(spec.modelContext.model),
