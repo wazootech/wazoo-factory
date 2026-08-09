@@ -8,18 +8,31 @@
  */
 
 import { writeFile } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { LADDER } from "./ladder.ts";
 import { createFixtureRepo, removeFixtureRepo } from "./fixture.ts";
 import { evaluateExecutor } from "./scoring.ts";
 import { buildReport } from "./report.ts";
 import { OpencodeExecutor } from "./adapters/opencode.ts";
+import { EveNativeExecutor } from "./adapters/eve-native.ts";
+import { createLocalSandbox } from "./adapters/local-sandbox.ts";
 import type {
   Executor,
   ExecutorId,
   ExecutorRun,
   TaskSpec,
 } from "./executor.ts";
+
+/** Load `.env.local` into `process.env` if present. */
+function loadLocalEnv(): void {
+  try {
+    process.loadEnvFile(join(process.cwd(), ".env.local"));
+  } catch {
+    // No .env.local; rely on the environment or let the adapter surface the
+    // missing-key error.
+  }
+}
 
 interface RunOptions {
   executors: ExecutorId[];
@@ -87,14 +100,11 @@ async function createExecutor(
   switch (id) {
     case "opencode":
       return new OpencodeExecutor();
-    case "eve-native": {
-      const { EveNativeExecutor } = await import("./adapters/eve-native.ts");
-      const { createLocalSandbox } =
-        await import("./adapters/local-sandbox.ts");
+    case "eve-native":
       return new EveNativeExecutor({
         sandbox: createLocalSandbox({ root: fixturePath }),
+        apiKey: process.env.AI_GATEWAY_API_KEY,
       });
-    }
   }
 }
 
@@ -114,6 +124,7 @@ async function runTask(
 }
 
 export async function main(): Promise<void> {
+  loadLocalEnv();
   const outputPath = join(process.cwd(), "spike-report.md");
   const { reportPath } = await runSpike({
     executors: ["opencode", "eve-native"],
@@ -126,4 +137,18 @@ export async function main(): Promise<void> {
   if (reportPath) {
     console.log("\nReport written to " + reportPath);
   }
+}
+
+// Executable entry point: `pnpm benchmark` runs `tsx benchmark/run.ts`.
+const isEntryPoint =
+  typeof process.env.VITEST === "undefined" &&
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) ===
+    fileURLToPath(pathToFileURL(process.argv[1]));
+
+if (isEntryPoint) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }
