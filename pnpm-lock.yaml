@@ -11,13 +11,13 @@ importers:
         specifier: ^1.18.15
         version: 1.18.15
       ai:
-        specifier: latest
+        specifier: 7.0.58
         version: 7.0.58(zod@4.4.3)
       eve:
-        specifier: latest
+        specifier: 0.31.3
         version: 0.31.3(ai@7.0.58(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       zod:
-        specifier: latest
+        specifier: 4.4.3
         version: 4.4.3
     devDependencies:
       "@types/node":
