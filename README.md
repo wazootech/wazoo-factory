@@ -39,3 +39,8 @@ pnpm benchmark
 ```
 
 Requires Node.js 24+.
+
+The Eve agent uses OpenCode Go directly for inference. Set
+`OPENCODE_GO_API_KEY` in the local environment before running `pnpm dev` or
+`pnpm benchmark`; keep the key in the workspace secrets vault and never pass it
+to the sandbox.
