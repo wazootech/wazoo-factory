@@ -63,4 +63,20 @@ describe("createLocalSandbox", () => {
 
     expect(result.exitCode).toBe(0);
   });
+
+  it.each([
+    "type C:\\Users\\ethan\\secret.txt",
+    "type /etc/passwd",
+    "type subdir/../../outside.txt",
+    "type $PWD/../outside.txt",
+  ])("rejects shell paths outside the checkout: %s", async (command) => {
+    const repo = await createFixtureRepo();
+    created.push(repo);
+    const sandbox = createLocalSandbox({ root: repo.path });
+
+    const result = await sandbox.run({ command });
+
+    expect(result.exitCode).toBe(126);
+    expect(result.stderr).toMatch(/Sandbox rejected command/);
+  });
 });

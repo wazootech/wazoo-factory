@@ -7,6 +7,8 @@
 
 export type ExecutorId = "opencode" | "eve-native";
 
+export const SANDBOX_COMMAND_REJECTION = "Sandbox rejected command:";
+
 export interface ModelReference {
   providerID: string;
   modelID: string;

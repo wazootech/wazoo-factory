@@ -15,6 +15,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { promisify } from "node:util";
+import { SANDBOX_COMMAND_REJECTION } from "../executor.ts";
 import type { SandboxHandle } from "./eve-native.ts";
 
 const execFileAsync = promisify(execFile);
@@ -42,6 +43,13 @@ export function createLocalSandbox(
     async run(runOptions) {
       const { command, workingDirectory, env, abortSignal } = runOptions;
       const cwd = workingDirectory ? resolvePath(workingDirectory) : root;
+      if (commandViolatesBoundary(command)) {
+        return {
+          exitCode: 126,
+          stdout: "",
+          stderr: `${SANDBOX_COMMAND_REJECTION} path outside checkout`,
+        };
+      }
       try {
         const { stdout, stderr } = await execFileAsync(
           process.platform === "win32" ? "cmd.exe" : "/bin/sh",
@@ -81,4 +89,27 @@ export function createLocalSandbox(
       await writeFile(target, content, "utf8");
     },
   };
+}
+
+/**
+ * Reject shell syntax that could construct a path after this check runs. The
+ * local facade cannot provide OS-level isolation, so it fails closed before
+ * starting the host shell rather than presenting cwd as a security boundary.
+ */
+function commandViolatesBoundary(command: string): boolean {
+  if (/[&|<>;`$%()]/.test(command)) return true;
+
+  const tokens = command.match(/"[^"]*"|'[^']*'|[^\s;&|]+/g) ?? [];
+  return tokens.some((token) => {
+    const value = token.replace(/^['"]|['"]$/g, "");
+    if (/^[A-Za-z]:[\\/]/.test(value)) return true;
+    if (/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(value)) return true;
+    if (/(?:\$PWD|\$\{PWD\}|%CD%)/i.test(value)) return true;
+    if (/^~(?:[\\/]|$)/.test(value)) return true;
+    if (value === "/") return true;
+    if (value.startsWith("/") && !/^\/(?:[abdfhnoqrstvx]+)$/.test(value)) {
+      return true;
+    }
+    return false;
+  });
 }

@@ -14,6 +14,7 @@ import { z } from "zod";
 import {
   parseModelReference,
   parseStructuredJson,
+  SANDBOX_COMMAND_REJECTION,
   type Executor,
   type ExecutionResult,
   type TaskSpec,
@@ -92,13 +93,10 @@ export class EveNativeExecutor implements Executor {
         "Run a shell command in the workspace checkout. stdout/stderr are captured.",
       inputSchema: CHECK_INPUT,
       execute: async ({ command }) => {
-        if (containsOutsidePath(command)) {
-          const observation = `Rejected shell command with a path outside the sandbox: ${command}`;
-          securityObservations.push(observation);
-          checksRun.push({ name: command, exitCode: 126 });
-          return { exitCode: 126, stdout: "", stderr: observation };
-        }
         const result = await sandbox.run({ command });
+        if (result.stderr.startsWith(SANDBOX_COMMAND_REJECTION)) {
+          securityObservations.push(`${result.stderr} ${command}`);
+        }
         checksRun.push({ name: command, exitCode: result.exitCode });
         return {
           exitCode: result.exitCode,
@@ -209,10 +207,4 @@ function errorMessage(error: unknown): string {
   const candidate = error as { message?: unknown };
   if (typeof candidate.message === "string") return candidate.message;
   return String(error);
-}
-
-function containsOutsidePath(command: string): boolean {
-  return /(?:[A-Za-z]:[\\/]|(?:^|[\s"'=])\/(?:workspace|Users|home|tmp)(?:[\\/]|$)|(?:^|[\s"'=])\.\.(?:[\\/]|$))/.test(
-    command,
-  );
 }
