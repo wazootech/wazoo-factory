@@ -1,26 +1,26 @@
 /**
  * Eve-native executor adapter. In the deployed factory this runs inside the
- * Eve runtime using `ctx.getSandbox()` (the Eve sandbox contract: bash / file
- * tools targeting `/workspace`). The comparison spike drives the same narrow
- * surface locally so both executors can be benchmarked without a live Eve
- * runtime.
+ * Eve runtime using `ctx.getSandbox()` (the Eve `SandboxSession`). The
+ * comparison spike drives the same narrow surface locally so both executors
+ * can be benchmarked without a live Eve runtime.
  */
 
+import type { Experimental_SandboxSession } from "ai";
 import type { Executor, ExecutionResult, TaskSpec } from "../executor.ts";
 
-/** The narrow sandbox surface both the Eve runtime and the spike provide. */
-export interface SandboxHandle {
-  run(options: { command: string }): Promise<{
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-  }>;
-}
+/**
+ * The sandbox surface the executor needs. Eve's `SandboxSession` (returned by
+ * `ctx.getSandbox()`) structurally satisfies this via the AI SDK sandbox it
+ * wraps, so the same adapter code runs unchanged in production and in the
+ * local spike (which provides a `createLocalSandbox` rooted at a checkout).
+ */
+export type SandboxHandle = Pick<
+  Experimental_SandboxSession,
+  "run" | "readTextFile" | "writeTextFile"
+>;
 
 export interface EveNativeOptions {
   sandbox: SandboxHandle;
-  /** A shell command that writes the final structured JSON to stdout. */
-  finalReportCommand?: string;
 }
 
 export class EveNativeExecutor implements Executor {
@@ -29,9 +29,9 @@ export class EveNativeExecutor implements Executor {
   constructor(private readonly options: EveNativeOptions) {}
 
   async run(spec: TaskSpec, workspacePath: string): Promise<ExecutionResult> {
-    // TODO(live-spike): drive the model through the sandbox's bash/file tools
-    // via a real Eve agent session. For the local spike, run a placeholder
-    // task command so the ladder executes end-to-end.
+    // TODO(live-spike): drive the model through the sandbox's run/read/write
+    // tools via a real Eve agent session. For the local spike, run a task
+    // command so the ladder executes end-to-end.
     const result = await this.options.sandbox.run({
       command: "node -e \"console.log('placeholder')\"",
     });

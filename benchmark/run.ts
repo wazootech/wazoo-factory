@@ -35,7 +35,7 @@ export async function runSpike(
 
   try {
     for (const id of options.executors) {
-      const executor = await createExecutor(id);
+      const executor = await createExecutor(id, fixture.path);
       try {
         for (const task of LADDER) {
           const run = await runTask(executor, task, fixture.path);
@@ -80,7 +80,10 @@ export async function runSpike(
   return { runs, reportPath };
 }
 
-async function createExecutor(id: ExecutorId): Promise<Executor> {
+async function createExecutor(
+  id: ExecutorId,
+  fixturePath: string,
+): Promise<Executor> {
   switch (id) {
     case "opencode":
       return new OpencodeExecutor();
@@ -88,7 +91,9 @@ async function createExecutor(id: ExecutorId): Promise<Executor> {
       const { EveNativeExecutor } = await import("./adapters/eve-native.ts");
       const { createLocalSandbox } =
         await import("./adapters/local-sandbox.ts");
-      return new EveNativeExecutor({ sandbox: createLocalSandbox() });
+      return new EveNativeExecutor({
+        sandbox: createLocalSandbox({ root: fixturePath }),
+      });
     }
   }
 }
