@@ -7,10 +7,17 @@
  * same adapter code is benchmarked without a live Eve runtime.
  */
 
-import { createGateway, generateText, tool } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText, stepCountIs, tool } from "ai";
 import type { Experimental_SandboxSession } from "ai";
 import { z } from "zod";
-import type { Executor, ExecutionResult, TaskSpec } from "../executor.ts";
+import {
+  parseModelReference,
+  parseStructuredJson,
+  type Executor,
+  type ExecutionResult,
+  type TaskSpec,
+} from "../executor.ts";
 
 /**
  * The sandbox surface the executor needs. Eve's `SandboxSession` (returned by
@@ -25,9 +32,11 @@ export type SandboxHandle = Pick<
 
 export interface EveNativeOptions {
   sandbox: SandboxHandle;
-  /** Optional gateway API key; defaults to `AI_GATEWAY_API_KEY` env var. */
+  /** Optional OpenCode Go API key; defaults to `OPENCODE_GO_API_KEY`. */
   apiKey?: string;
 }
+
+const OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 /** Structured JSON evidence the model is asked to produce as its last message. */
 const STRUCTURED_OUTPUT_INSTRUCTION = `
@@ -68,15 +77,27 @@ export class EveNativeExecutor implements Executor {
 
   async run(spec: TaskSpec, workspacePath: string): Promise<ExecutionResult> {
     const sandbox = this.options.sandbox;
-    const gateway = createGateway({ apiKey: this.options.apiKey });
+    const model = parseModelReference(spec.modelContext.model);
+    const provider = createOpenAICompatible({
+      name: model.providerID,
+      apiKey: this.options.apiKey,
+      baseURL: OPENCODE_GO_BASE_URL,
+    });
 
     const checksRun: { name: string; exitCode: number }[] = [];
+    const securityObservations: string[] = [];
 
     const bashTool = tool({
       description:
         "Run a shell command in the workspace checkout. stdout/stderr are captured.",
       inputSchema: CHECK_INPUT,
       execute: async ({ command }) => {
+        if (containsOutsidePath(command)) {
+          const observation = `Rejected shell command with a path outside the sandbox: ${command}`;
+          securityObservations.push(observation);
+          checksRun.push({ name: command, exitCode: 126 });
+          return { exitCode: 126, stdout: "", stderr: observation };
+        }
         const result = await sandbox.run({ command });
         checksRun.push({ name: command, exitCode: result.exitCode });
         return {
@@ -111,7 +132,7 @@ export class EveNativeExecutor implements Executor {
       | undefined;
     try {
       const result = await generateText({
-        model: gateway(spec.modelContext.model),
+        model: provider(model.modelID),
         system: STRUCTURED_OUTPUT_INSTRUCTION,
         prompt: spec.prompt,
         tools: {
@@ -120,6 +141,7 @@ export class EveNativeExecutor implements Executor {
           write_file: writeFileTool,
         },
         toolChoice: "auto",
+        stopWhen: stepCountIs(20),
         maxRetries: 1,
       });
       text = result.text;
@@ -130,6 +152,7 @@ export class EveNativeExecutor implements Executor {
         success: false,
         filesChanged: [],
         checksRun,
+        securityObservations,
         interrupted: this.interrupted,
         resumed: false,
         error: `Model request failed: ${message}`,
@@ -145,6 +168,10 @@ export class EveNativeExecutor implements Executor {
         }
       : undefined;
 
+    const parseError = output
+      ? undefined
+      : `Model did not return structured JSON: ${text.slice(0, 500)}`;
+
     return {
       success: output?.success ?? false,
       filesChanged: output?.filesChanged ?? [],
@@ -153,6 +180,8 @@ export class EveNativeExecutor implements Executor {
       structuredOutput: output as Record<string, unknown> | undefined,
       interrupted: this.interrupted,
       resumed: false,
+      securityObservations,
+      error: parseError,
     };
   }
 
@@ -172,13 +201,7 @@ export class EveNativeExecutor implements Executor {
 }
 
 function parseStructuredOutput(text: string): StructuredOutput | undefined {
-  try {
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? [text];
-    const json = JSON.parse(match[1] ?? text) as StructuredOutput;
-    return typeof json === "object" && json !== null ? json : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseStructuredJson(text) as StructuredOutput | undefined;
 }
 
 function errorMessage(error: unknown): string {
@@ -186,4 +209,10 @@ function errorMessage(error: unknown): string {
   const candidate = error as { message?: unknown };
   if (typeof candidate.message === "string") return candidate.message;
   return String(error);
+}
+
+function containsOutsidePath(command: string): boolean {
+  return /(?:[A-Za-z]:[\\/]|(?:^|[\s"'=])\/(?:workspace|Users|home|tmp)(?:[\\/]|$)|(?:^|[\s"'=])\.\.(?:[\\/]|$))/.test(
+    command,
+  );
 }

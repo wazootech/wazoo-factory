@@ -5,7 +5,13 @@
  */
 
 import { createOpencode } from "@opencode-ai/sdk";
-import type { Executor, ExecutionResult, TaskSpec } from "../executor.ts";
+import {
+  parseModelReference,
+  parseStructuredJson,
+  type Executor,
+  type ExecutionResult,
+  type TaskSpec,
+} from "../executor.ts";
 
 /**
  * The structured JSON payload the model is asked to produce as its final
@@ -32,13 +38,16 @@ export class OpencodeExecutor implements Executor {
 
   private client: Awaited<ReturnType<typeof createOpencode>>["client"] | null =
     null;
+  private server: Awaited<ReturnType<typeof createOpencode>>["server"] | null =
+    null;
   private sessionId: string | null = null;
   private interrupted = false;
 
   private async ensureClient() {
     if (!this.client) {
-      const { client } = await createOpencode();
+      const { client, server } = await createOpencode({ port: 0 });
       this.client = client;
+      this.server = server;
     }
     return this.client;
   }
@@ -65,6 +74,7 @@ export class OpencodeExecutor implements Executor {
       path: { id: sessionId },
       query: { directory: workspacePath },
       body: {
+        model: parseModelReference(spec.modelContext.model),
         parts: [
           {
             type: "text",
@@ -105,22 +115,16 @@ export class OpencodeExecutor implements Executor {
   }
 
   async close(): Promise<void> {
-    // The SDK's server is closed via the returned server handle; the client
-    // alone has no close. Tracked as a note for the spike report.
+    this.server?.close();
+    this.server = null;
+    this.client = null;
   }
 }
 
 function parseStructuredOutput(reply: unknown): StructuredOutput | undefined {
   const text = replyToText(reply);
   if (!text) return undefined;
-  try {
-    // The model may wrap the JSON in a fenced code block.
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? [text];
-    const json = JSON.parse(match[1] ?? text) as StructuredOutput;
-    return typeof json === "object" && json !== null ? json : undefined;
-  } catch {
-    return undefined;
-  }
+  return parseStructuredJson(text) as StructuredOutput | undefined;
 }
 
 function replyToText(reply: unknown): string | undefined {

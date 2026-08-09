@@ -8,7 +8,7 @@
 import type { TaskSpec } from "./executor.ts";
 
 const SHARED_MODEL_CONTEXT = {
-  model: "openai/gpt-5.5",
+  model: "opencode-go/deepseek-v4-flash",
   temperature: 0,
   maxTokens: 8192,
 } as const;

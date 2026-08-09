@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { evaluateExecutor } from "../benchmark/scoring.ts";
 import { buildReport } from "../benchmark/report.ts";
-import type { ExecutorRun } from "../benchmark/executor.ts";
+import {
+  parseModelReference,
+  parseStructuredJson,
+  type ExecutorRun,
+} from "../benchmark/executor.ts";
 
 function run(
   executor: "opencode" | "eve-native",
@@ -97,6 +101,31 @@ describe("evaluateExecutor", () => {
       (d) => d.dimension === "resumeBehavior",
     );
     expect(resume!.score).toBe(0);
+  });
+});
+
+describe("parseModelReference", () => {
+  it("splits provider and model ids", () => {
+    expect(parseModelReference("opencode-go/deepseek-v4-flash")).toEqual({
+      providerID: "opencode-go",
+      modelID: "deepseek-v4-flash",
+    });
+  });
+
+  it("rejects malformed model ids", () => {
+    expect(() => parseModelReference("deepseek-v4-flash")).toThrow(
+      /provider\/model format/,
+    );
+  });
+});
+
+describe("parseStructuredJson", () => {
+  it("extracts JSON after a natural-language response", () => {
+    expect(
+      parseStructuredJson(
+        'The task is complete. {"filesChanged": [], "success": true}',
+      ),
+    ).toEqual({ filesChanged: [], success: true });
   });
 });
 

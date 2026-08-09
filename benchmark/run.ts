@@ -21,6 +21,7 @@ import type {
   Executor,
   ExecutorId,
   ExecutorRun,
+  ExecutionResult,
   TaskSpec,
 } from "./executor.ts";
 
@@ -103,7 +104,7 @@ async function createExecutor(
     case "eve-native":
       return new EveNativeExecutor({
         sandbox: createLocalSandbox({ root: fixturePath }),
-        apiKey: process.env.AI_GATEWAY_API_KEY,
+        apiKey: process.env.OPENCODE_GO_API_KEY,
       });
   }
 }
@@ -114,7 +115,19 @@ async function runTask(
   workspacePath: string,
 ): Promise<ExecutorRun> {
   const started = Date.now();
-  const result = await executor.run(task, workspacePath);
+  let result: ExecutionResult;
+  try {
+    result = await executor.run(task, workspacePath);
+  } catch (error) {
+    result = {
+      success: false,
+      filesChanged: [],
+      checksRun: [],
+      interrupted: false,
+      resumed: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
   return {
     executor: executor.id,
     taskId: task.id,

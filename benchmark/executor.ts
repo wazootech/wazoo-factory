@@ -7,6 +7,49 @@
 
 export type ExecutorId = "opencode" | "eve-native";
 
+export interface ModelReference {
+  providerID: string;
+  modelID: string;
+}
+
+export function parseModelReference(model: string): ModelReference {
+  const separator = model.indexOf("/");
+  if (separator <= 0 || separator === model.length - 1) {
+    throw new Error(`Model must use the provider/model format: ${model}`);
+  }
+  return {
+    providerID: model.slice(0, separator),
+    modelID: model.slice(separator + 1),
+  };
+}
+
+export function parseStructuredJson(
+  text: string,
+): Record<string, unknown> | undefined {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)?.[1];
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  const embedded =
+    start >= 0 && end > start ? text.slice(start, end + 1) : undefined;
+
+  for (const candidate of [text, fenced, embedded]) {
+    if (!candidate) continue;
+    try {
+      const value = JSON.parse(candidate) as unknown;
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        return value as Record<string, unknown>;
+      }
+    } catch {
+      // Try the next possible JSON representation.
+    }
+  }
+  return undefined;
+}
+
 /** A task in the progressive benchmark ladder. */
 export interface TaskSpec {
   /** Human-readable task id (e.g. "01-hello-world"). */
