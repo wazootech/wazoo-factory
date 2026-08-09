@@ -10,9 +10,6 @@ importers:
       "@ai-sdk/openai-compatible":
         specifier: 2.0.0
         version: 2.0.0(zod@4.4.3)
-      "@opencode-ai/sdk":
-        specifier: ^1.18.15
-        version: 1.18.15
       ai:
         specifier: 7.0.58
         version: 7.0.58(zod@4.4.3)
@@ -339,12 +336,6 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
-
-  "@opencode-ai/sdk@1.18.15":
-    resolution:
-      {
-        integrity: sha512-8sfo9nGiVwesAZW9Wqkvynyn7w4wYaHx1O9qOHpYL65+Bs2XUpHP3kBbZe58gjQydFgk6I74kUF7sqCiPu2arQ==,
-      }
 
   "@oxc-project/types@0.143.0":
     resolution:
@@ -840,13 +831,6 @@ packages:
       }
     engines: { node: ^14.18.0 || >=16.10.0 }
 
-  cross-spawn@7.0.6:
-    resolution:
-      {
-        integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==,
-      }
-    engines: { node: ">= 8" }
-
   crossws@0.4.10:
     resolution:
       {
@@ -1032,12 +1016,6 @@ packages:
         integrity: sha512-uDjmnPyp1q4Sgzf3w+J/Fc6UqcCEj0x4Wjp7OqK5dGhNeDgpyrAmnS6ey8QWrX3SWDon2DMKf9sBa5X9+CVyMA==,
       }
 
-  isexe@2.0.0:
-    resolution:
-      {
-        integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==,
-      }
-
   js-tokens@9.0.1:
     resolution:
       {
@@ -1134,13 +1112,6 @@ packages:
         integrity: sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ==,
       }
 
-  path-key@3.1.1:
-    resolution:
-      {
-        integrity: sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==,
-      }
-    engines: { node: ">=8" }
-
   pathe@2.0.3:
     resolution:
       {
@@ -1203,20 +1174,6 @@ packages:
       {
         integrity: sha512-ePa+XGk00/3HuCqrEnK3LxJW7I0SdNg6EFzKUJG73hMAdDcOUC/i/aSz7LSDwLrGr33kal/rqOGydzwl6U7zBA==,
       }
-
-  shebang-command@2.0.0:
-    resolution:
-      {
-        integrity: sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==,
-      }
-    engines: { node: ">=8" }
-
-  shebang-regex@3.0.0:
-    resolution:
-      {
-        integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==,
-      }
-    engines: { node: ">=8" }
 
   siginfo@2.0.0:
     resolution:
@@ -1498,14 +1455,6 @@ packages:
       jsdom:
         optional: true
 
-  which@2.0.2:
-    resolution:
-      {
-        integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==,
-      }
-    engines: { node: ">= 8" }
-    hasBin: true
-
   why-is-node-running@2.3.0:
     resolution:
       {
@@ -1640,10 +1589,6 @@ snapshots:
 
   "@napi-rs/lzma-linux-x64-gnu@1.5.1":
     optional: true
-
-  "@opencode-ai/sdk@1.18.15":
-    dependencies:
-      cross-spawn: 7.0.6
 
   "@oxc-project/types@0.143.0": {}
 
@@ -1850,12 +1795,6 @@ snapshots:
 
   consola@3.4.2: {}
 
-  cross-spawn@7.0.6:
-    dependencies:
-      path-key: 3.1.1
-      shebang-command: 2.0.0
-      which: 2.0.2
-
   crossws@0.4.10(srvx@0.11.22):
     optionalDependencies:
       srvx: 0.11.22
@@ -1979,8 +1918,6 @@ snapshots:
 
   httpxy@0.5.5: {}
 
-  isexe@2.0.0: {}
-
   js-tokens@9.0.1: {}
 
   json-schema@0.4.0: {}
@@ -2056,8 +1993,6 @@ snapshots:
 
   ohash@2.0.11: {}
 
-  path-key@3.1.1: {}
-
   pathe@2.0.3: {}
 
   pathval@2.0.1: {}
@@ -2127,12 +2062,6 @@ snapshots:
       fsevents: 2.3.3
 
   rou3@0.8.1: {}
-
-  shebang-command@2.0.0:
-    dependencies:
-      shebang-regex: 3.0.0
-
-  shebang-regex@3.0.0: {}
 
   siginfo@2.0.0: {}
 
@@ -2260,10 +2189,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-
-  which@2.0.2:
-    dependencies:
-      isexe: 2.0.0
 
   why-is-node-running@2.3.0:
     dependencies:
