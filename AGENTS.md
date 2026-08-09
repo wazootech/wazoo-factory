@@ -11,11 +11,12 @@ family. See `README.md`.
 
 - Node.js 24+, TypeScript, strict mode, ESM.
 - Eve project layout under `agent/` (see eve.dev/docs/project-structure).
-- The coding-executor interface lives in `benchmark/executor.ts`; adapters in
-  `benchmark/adapters/`. The OpenCode SDK and Eve-native sandbox execution are
-  interchangeable behind that interface.
-- The comparison spike (`benchmark/`) is the current frontier. It runs locally
-  first; the Discord channel is a later milestone.
+- Eve's native agent loop and sandbox are the coding execution path. Keep model
+  credentials in the app runtime and use `ctx.getSandbox()` only from authored
+  runtime code that needs direct sandbox access.
+- The production path is intentionally provider-parity first: OpenCode Go for
+  inference and Vercel Sandbox for isolated execution in local development and
+  deployment.
 - Wazoopedia `wiki` toolchain context, commit signing, and the production
   GitHub App are deferred capabilities (tracked as issues).
 - Never expose credentials to the sandbox or executor. Keep secrets in env and
@@ -29,5 +30,4 @@ family. See `README.md`.
 pnpm install
 pnpm typecheck
 pnpm test
-pnpm benchmark
 ```

@@ -1,7 +1,7 @@
 {
   "name": "wazoo-factory",
   "version": "0.0.0",
-  "description": "Wazoo software factory: Eve-based agent orchestration with interchangeable coding executors",
+  "description": "Wazoo software factory: Eve-based agent orchestration with sandboxed coding",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -11,14 +11,14 @@
   },
   "scripts": {
     "dev": "eve dev",
-    "benchmark": "tsx benchmark/run.ts",
+    "build": "eve build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.18.15",
+    "@ai-sdk/openai-compatible": "2.0.0",
     "ai": "7.0.58",
     "eve": "0.31.3",
     "zod": "4.4.3"
