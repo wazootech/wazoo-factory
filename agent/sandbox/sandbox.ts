@@ -6,6 +6,14 @@ export default defineSandbox({
   // exercised against the same isolation boundary before deployment.
   backend: vercel({
     resources: { vcpus: 2 },
-    networkPolicy: "allow-all",
+    networkPolicy: {
+      allow: [
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "registry.npmjs.org",
+        "*.npmjs.org",
+      ],
+    },
   }),
 });

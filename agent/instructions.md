@@ -33,6 +33,7 @@ Use Eve's built-in sandbox tools for implementation and verification:
   sandbox.
 - Run the target repository's declared checks, including its build when one is
   available, before reporting success.
-- Keep evidence for rejected outside-workspace operations separate from
-  successful in-workspace verification commands. The sandbox backend enforces
-  the filesystem boundary; do not replace it with host-shell path filtering.
+- Keep sandbox isolation evidence separate from successful in-workspace
+  verification commands. The sandbox backend isolates the container from the
+  host; container-local paths may still be readable. Do not replace this
+  boundary with host-shell path filtering.
