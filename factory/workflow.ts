@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { Approval } from "./authorization.ts";
+import type { Approval, AuthenticatedPrincipal } from "./authorization.ts";
 import {
   assertApproval,
   HmacApprovalSigner,
+  newApproval,
   type ApprovalSigner,
 } from "./authorization.ts";
 import {
@@ -55,10 +56,71 @@ export class FactoryWorkflow {
     return workflow;
   }
 
+  async get(workflowId: string) {
+    const workflow = await this.require(workflowId);
+    const audit = await this.store.getAudit(workflowId);
+    return {
+      workflow,
+      audit: audit.map(
+        ({ id, at, principal, action, from, to, artifactDigest }) => ({
+          id,
+          at,
+          principal,
+          action,
+          from,
+          to,
+          artifactDigest,
+        }),
+      ),
+    };
+  }
+
+  async recordApproval(
+    principal: AuthenticatedPrincipal,
+    input: {
+      workflowId: string;
+      action: GateAction;
+      artifactDigest: string;
+      ttlMs?: number;
+      sessionId?: string;
+    },
+  ) {
+    if (principal.type !== "human")
+      throw new Error("Only human principals can issue approvals");
+    const workflow = await this.require(input.workflowId);
+    const approval = newApproval(
+      principal,
+      input.workflowId,
+      input.action,
+      input.artifactDigest,
+      this.approvalSigner,
+      input.ttlMs ?? 900_000,
+    );
+    await this.store.saveApproval(approval);
+    await this.audit(
+      workflow,
+      "approval.issued",
+      approval.principal.id,
+      input.artifactDigest,
+      {
+        approvalId: approval.id,
+        action: input.action,
+        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      },
+    );
+    return {
+      approvalId: approval.id,
+      workflowId: approval.workflowId,
+      action: approval.action,
+      artifactDigest: approval.artifactDigest,
+      expiresAt: approval.expiresAt,
+    };
+  }
+
   async plan(
     workflowId: string,
     plan: Omit<Plan, "artifactDigest">,
-    approvals: Approval[],
+    approvals: (Approval | string)[],
     idempotencyKey = `plan:${plan.id}`,
   ) {
     const workflow = await this.require(workflowId);
@@ -74,10 +136,16 @@ export class FactoryWorkflow {
         : candidate,
     };
     const artifactDigest = digestArtifact(value);
-    await this.authorize(workflow, approvals, "approve-plan", artifactDigest);
+    const loadedApprovals = await this.resolveApprovals(approvals);
     await this.authorize(
       workflow,
-      approvals,
+      loadedApprovals,
+      "approve-plan",
+      artifactDigest,
+    );
+    await this.authorize(
+      workflow,
+      loadedApprovals,
       "associate-issues",
       artifactDigest,
     );
@@ -102,16 +170,17 @@ export class FactoryWorkflow {
   async implement(
     workflowId: string,
     spec: Parameters<SandboxAdapter["implement"]>[0],
-    approvals: Approval[],
+    approvals: (Approval | string)[],
     idempotencyKey = `implement:${workflowId}`,
   ) {
     const workflow = await this.require(workflowId);
     if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.plan)
       throw new Error("Plan is required before implementation");
+    const loadedApprovals = await this.resolveApprovals(approvals);
     await this.authorize(
       workflow,
-      approvals,
+      loadedApprovals,
       "mutate-repository",
       workflow.plan.artifactDigest,
     );
@@ -249,22 +318,23 @@ export class FactoryWorkflow {
   async createDraftPullRequest(
     workflowId: string,
     input: Parameters<GitHubAdapter["createDraftPullRequest"]>[0],
-    approvals: Approval[],
+    approvals: (Approval | string)[],
     idempotencyKey = `draft-pr:${workflowId}`,
   ) {
     const workflow = await this.require(workflowId);
     if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.review?.passed)
       throw new Error("Passing independent review is required");
+    const loadedApprovals = await this.resolveApprovals(approvals);
     await this.authorize(
       workflow,
-      approvals,
+      loadedApprovals,
       "approve-review",
       workflow.review.artifactDigest,
     );
     await this.authorize(
       workflow,
-      approvals,
+      loadedApprovals,
       "create-draft-pr",
       workflow.review.artifactDigest,
     );
@@ -288,6 +358,23 @@ export class FactoryWorkflow {
       workflow.review.artifactDigest,
     );
     return next;
+  }
+
+  private async resolveApprovals(
+    candidates: (Approval | string)[],
+  ): Promise<Approval[]> {
+    const approvals = await Promise.all(
+      candidates.map(async (candidate) => {
+        if (typeof candidate === "string") {
+          const loaded = await this.store.getApproval(candidate);
+          if (!loaded)
+            throw new Error(`Approval record not found: ${candidate}`);
+          return loaded;
+        }
+        return candidate;
+      }),
+    );
+    return approvals;
   }
 
   private async require(id: string) {
@@ -336,6 +423,7 @@ export class FactoryWorkflow {
     action: string,
     principal: string,
     artifactDigest?: string,
+    metadata: Record<string, unknown> = {},
   ) {
     await this.store.appendAudit({
       id: randomUUID(),
@@ -344,7 +432,7 @@ export class FactoryWorkflow {
       principal,
       action,
       artifactDigest,
-      metadata: redactTrace({}) as Record<string, string>,
+      metadata: redactTrace(metadata) as Record<string, string>,
     });
   }
 }
