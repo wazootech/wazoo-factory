@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
-import { factoryWorkflow, loadApprovals } from "../lib/factory-runtime.ts";
+import { factoryWorkflow } from "../lib/factory-runtime.ts";
 
 export default defineTool({
   description:
@@ -22,7 +22,7 @@ export default defineTool({
     return (await factoryWorkflow(ctx)).createDraftPullRequest(
       input.workflowId,
       pullRequest,
-      await loadApprovals(approvalIds),
+      approvalIds,
       idempotencyKey,
     );
   },

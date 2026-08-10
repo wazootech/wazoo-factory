@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { Plan } from "../../factory/contracts.ts";
-import { loadApprovals, factoryWorkflow } from "../lib/factory-runtime.ts";
+import { factoryWorkflow } from "../lib/factory-runtime.ts";
 
 export default defineTool({
   description:
@@ -15,7 +15,7 @@ export default defineTool({
     const { approvalIds, ...plan } = input;
     const result = await (
       await factoryWorkflow(ctx)
-    ).plan(plan.workflowId, plan, await loadApprovals(approvalIds));
+    ).plan(plan.workflowId, plan, approvalIds);
     return result;
   },
 });

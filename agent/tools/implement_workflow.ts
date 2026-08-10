@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
-import { loadApprovals, factoryWorkflow } from "../lib/factory-runtime.ts";
+import { factoryWorkflow } from "../lib/factory-runtime.ts";
 
 export default defineTool({
   description:
@@ -28,7 +28,7 @@ export default defineTool({
         },
         permissions: { shell: true, read: true, write: true },
       },
-      await loadApprovals(input.approvalIds),
+      input.approvalIds,
       input.idempotencyKey,
     );
     return result;

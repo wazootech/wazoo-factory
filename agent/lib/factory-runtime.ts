@@ -24,26 +24,79 @@ import {
 import { FactoryWorkflow } from "../../factory/workflow.ts";
 import type { Approval } from "../../factory/authorization.ts";
 
-let store: WorkflowStore | undefined;
+export class FactoryRuntime {
+  private storeInstance?: WorkflowStore;
+  private signerInstance?: ApprovalSigner;
 
-/**
- * The default local store is the JSON file adapter. Set `FACTORY_STORE=postgres`
- * to use real Postgres SQL: a connection string selects the hosted Neon adapter,
- * otherwise an in-process PGlite database is used (contract-test and local-dev
- * parity with the hosted store).
- */
-export function factoryStore(): WorkflowStore {
-  if (store) return store;
-  if (process.env.FACTORY_STORE === "postgres") {
-    const connectionString = process.env.FACTORY_DATABASE_URL;
-    store = connectionString
-      ? new PostgresWorkflowStore(createNeonDatabase(connectionString))
-      : new PostgresWorkflowStore(pgliteDatabase(new PGlite()));
-    return store;
+  getStore(): WorkflowStore {
+    if (this.storeInstance) return this.storeInstance;
+    if (process.env.FACTORY_STORE === "postgres") {
+      const connectionString = process.env.FACTORY_DATABASE_URL;
+      this.storeInstance = connectionString
+        ? new PostgresWorkflowStore(createNeonDatabase(connectionString))
+        : new PostgresWorkflowStore(pgliteDatabase(new PGlite()));
+      return this.storeInstance;
+    }
+    return (this.storeInstance = new JsonWorkflowStore(
+      process.env.FACTORY_STATE_PATH ?? ".eve/factory-state.json",
+    ));
   }
-  return (store = new JsonWorkflowStore(
-    process.env.FACTORY_STATE_PATH ?? ".eve/factory-state.json",
-  ));
+
+  getApprovalSigner(): ApprovalSigner {
+    if (this.signerInstance) return this.signerInstance;
+    const secret = process.env.FACTORY_APPROVAL_SECRET;
+    if (!secret) throw new Error("FACTORY_APPROVAL_SECRET is not configured");
+    return (this.signerInstance = new HmacApprovalSigner(secret));
+  }
+
+  async getWorkflow(ctx: ToolContext): Promise<FactoryWorkflow> {
+    const sandbox = await ctx.getSandbox();
+    return new FactoryWorkflow(
+      this.getStore(),
+      new WspaceAdapter(),
+      new GitHubAppAdapter({
+        appId: requiredEnv("GITHUB_APP_ID"),
+        installationId: requiredEnv("GITHUB_APP_INSTALLATION_ID"),
+        privateKey: requiredEnv("GITHUB_APP_PRIVATE_KEY").replace(/\\n/g, "\n"),
+        repositories: requiredListEnv("GITHUB_APP_REPOSITORIES"),
+      }),
+      new ExecutorSandboxAdapter(
+        new EveNativeExecutor({
+          sandbox,
+          apiKey: process.env.AI_GATEWAY_API_KEY,
+        }),
+      ),
+      new WspaceVerificationAdapter(new WspaceAdapter()),
+      new FunctionReviewAdapter(async () => {
+        throw new Error("Independent review provider is not configured");
+      }),
+      this.getApprovalSigner(),
+    );
+  }
+
+  async loadApprovals(ids: string[]): Promise<Approval[]> {
+    const store = this.getStore();
+    const approvals = await Promise.all(ids.map((id) => store.getApproval(id)));
+    if (approvals.some((approval) => !approval))
+      throw new Error("One or more approval records were not found");
+    return approvals as Approval[];
+  }
+}
+
+export const defaultRuntime = new FactoryRuntime();
+
+export function factoryStore(): WorkflowStore {
+  return defaultRuntime.getStore();
+}
+
+export function approvalSigner(): ApprovalSigner {
+  return defaultRuntime.getApprovalSigner();
+}
+
+export function approvalSecret(): string {
+  const secret = process.env.FACTORY_APPROVAL_SECRET;
+  if (!secret) throw new Error("FACTORY_APPROVAL_SECRET is not configured");
+  return secret;
 }
 
 export function sessionPrincipal(ctx: ToolContext): AuthenticatedPrincipal {
@@ -107,41 +160,8 @@ function attribute(
   return typeof value === "string" ? value : undefined;
 }
 
-export function approvalSecret() {
-  const secret = process.env.FACTORY_APPROVAL_SECRET;
-  if (!secret) throw new Error("FACTORY_APPROVAL_SECRET is not configured");
-  return secret;
-}
-
-let signer: ApprovalSigner | undefined;
-
-export function approvalSigner() {
-  return (signer ??= new HmacApprovalSigner(approvalSecret()));
-}
-
 export async function factoryWorkflow(ctx: ToolContext) {
-  const sandbox = await ctx.getSandbox();
-  return new FactoryWorkflow(
-    factoryStore(),
-    new WspaceAdapter(),
-    new GitHubAppAdapter({
-      appId: requiredEnv("GITHUB_APP_ID"),
-      installationId: requiredEnv("GITHUB_APP_INSTALLATION_ID"),
-      privateKey: requiredEnv("GITHUB_APP_PRIVATE_KEY").replace(/\\n/g, "\n"),
-      repositories: requiredListEnv("GITHUB_APP_REPOSITORIES"),
-    }),
-    new ExecutorSandboxAdapter(
-      new EveNativeExecutor({
-        sandbox,
-        apiKey: process.env.AI_GATEWAY_API_KEY,
-      }),
-    ),
-    new WspaceVerificationAdapter(new WspaceAdapter()),
-    new FunctionReviewAdapter(async () => {
-      throw new Error("Independent review provider is not configured");
-    }),
-    approvalSigner(),
-  );
+  return defaultRuntime.getWorkflow(ctx);
 }
 
 function requiredEnv(name: string) {
@@ -160,10 +180,5 @@ function requiredListEnv(name: string) {
 }
 
 export async function loadApprovals(ids: string[]): Promise<Approval[]> {
-  const approvals = await Promise.all(
-    ids.map((id) => factoryStore().getApproval(id)),
-  );
-  if (approvals.some((approval) => !approval))
-    throw new Error("One or more approval records were not found");
-  return approvals as Approval[];
+  return defaultRuntime.loadApprovals(ids);
 }
