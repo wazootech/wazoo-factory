@@ -22,20 +22,48 @@ The factory is a **process**, not a CLI feature. It leans on:
 
 ## Status
 
-Early. The coding path now uses Eve's native agent loop and sandbox directly.
-The factory workflow around planning, approvals, repository operations, review,
-and pull-request handoff is still being built.
+The light-mode tracer bullet is implemented in `factory/`: typed workflow
+artifacts move through approval-gated planning, bounded implementation,
+deterministic verification, independent review, and draft PR handoff. Workflow
+records, immutable artifacts, approvals, and append-only audit events share a
+storage interface with both in-memory and local JSON implementations. Merge and
+deploy remain intentionally out of scope.
 
-This PR is a configuration-only transition from the local executor comparison
-spike to the OpenCode Go plus Vercel Sandbox path. The deleted benchmark is not
-being presented as equivalent coverage: provider boundary behavior is covered
-by the recorded live smoke test below, while the committed tests cover the
-authored model, sandbox, and operating-rule configuration.
+Hosted GitHub access uses `GitHubAppAdapter` with short-lived installation
+tokens. Configure these server-side environment variables before invoking
+factory tools:
+
+```text
+GITHUB_APP_ID
+GITHUB_APP_INSTALLATION_ID
+GITHUB_APP_PRIVATE_KEY
+GITHUB_APP_REPOSITORIES
+```
+
+`GITHUB_APP_PRIVATE_KEY` may contain literal newlines or `\n` escapes. The
+`GITHUB_APP_REPOSITORIES` is a comma-separated allowlist. Every installation
+token is scoped to that list, and the hosted runtime does not use a user `gh`
+session for repository mutations.
+
+Durable workflow state selects the `WorkflowStore` adapter:
+
+```text
+FACTORY_SERVICE_TOKEN    # shared bearer token gating all functional HTTP routes
+FACTORY_STORE            # "postgres" for the hosted adapter, otherwise JSON file
+FACTORY_DATABASE_URL     # hosted Postgres connection string (Neon / Vercel Postgres)
+FACTORY_STATE_PATH       # JSON snapshot path when FACTORY_STORE is not "postgres"
+```
+
+With `FACTORY_STORE=postgres`, a `FACTORY_DATABASE_URL` uses the hosted Neon
+adapter; without one, an in-process PGlite database provides local parity for
+the same contract suite (`tests/storage_contract_test.ts`).
 
 ## Repositories
 
-- `agent/` — Eve agent instructions, model, and sandbox configuration
-- `tests/` — unit and configuration tests
+- `agent/` — Eve agent (instructions, tools, sandbox, channels)
+- `factory/` — typed contracts, authorization, storage, adapters, and workflow
+- `docs/` — hosted architecture and GitHub App operation guides
+- `tests/` — unit and contract tests
 
 ## Development
 

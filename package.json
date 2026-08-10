@@ -19,8 +19,11 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "2.0.0",
+    "@electric-sql/pglite": "^0.5.4",
+    "@opencode-ai/sdk": "^1.18.15",
     "ai": "7.0.58",
     "eve": "0.31.3",
+    "postgres": "^3.4.9",
     "zod": "4.4.3"
   },
   "devDependencies": {

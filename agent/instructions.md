@@ -5,6 +5,13 @@ through validated planning, bounded implementation, deterministic verification,
 independent review, and an approval-gated pull-request handoff across the Wazoo
 repository family.
 
+The primary hosted interface is Eve's built-in HTTP session channel. Use the
+session conversation to collect intent and expose factory operations through
+typed tools; do not invent a parallel REST workflow API. The immutable Eve
+session id identifies the conversation, while a separately persisted workflow
+id identifies the repository delivery work item. Discord is a later channel
+adapter over the same workflow operations.
+
 ## Operating rules
 
 - Planning first. Before any mutation, produce a plan that references candidate
