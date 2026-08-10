@@ -10,12 +10,21 @@ importers:
       "@ai-sdk/openai-compatible":
         specifier: 2.0.0
         version: 2.0.0(zod@4.4.3)
+      "@electric-sql/pglite":
+        specifier: ^0.5.4
+        version: 0.5.4
+      "@opencode-ai/sdk":
+        specifier: ^1.18.15
+        version: 1.18.16
       ai:
         specifier: 7.0.58
         version: 7.0.58(zod@4.4.3)
       eve:
         specifier: 0.31.3
-        version: 0.31.3(ai@7.0.58(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+        version: 0.31.3(@electric-sql/pglite@0.5.4)(ai@7.0.58(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -86,6 +95,12 @@ packages:
         integrity: sha512-6or44XprPzKbr8zkmzosowSE0pxkvJcoojBL+mCZvPUt3kvXp3XSNqeVun9golb1acEfSo6yaEBRT18h2VU+1Q==,
       }
     engines: { node: ">=22" }
+
+  "@electric-sql/pglite@0.5.4":
+    resolution:
+      {
+        integrity: sha512-yYZUyyXrHU7tPlCjwZQJ6hIG9DscdCCn7Uk0mYKwC1FeHX286AbcmFveMiRBEak8e9iPupjsoVImN3yJZVed2g==,
+      }
 
   "@esbuild/aix-ppc64@0.28.2":
     resolution:
@@ -336,6 +351,12 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  "@opencode-ai/sdk@1.18.16":
+    resolution:
+      {
+        integrity: sha512-UvaHyL93spLm7MttoprWTOBSYQN3aYWd7/3Ie5WNnG2pRAPq/U/d51qt0smYBTrkjxqlQmg+AJoGw8MEH6lGUg==,
+      }
 
   "@oxc-project/types@0.143.0":
     resolution:
@@ -831,6 +852,13 @@ packages:
       }
     engines: { node: ^14.18.0 || >=16.10.0 }
 
+  cross-spawn@7.0.6:
+    resolution:
+      {
+        integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==,
+      }
+    engines: { node: ">= 8" }
+
   crossws@0.4.10:
     resolution:
       {
@@ -1016,6 +1044,12 @@ packages:
         integrity: sha512-uDjmnPyp1q4Sgzf3w+J/Fc6UqcCEj0x4Wjp7OqK5dGhNeDgpyrAmnS6ey8QWrX3SWDon2DMKf9sBa5X9+CVyMA==,
       }
 
+  isexe@2.0.0:
+    resolution:
+      {
+        integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==,
+      }
+
   js-tokens@9.0.1:
     resolution:
       {
@@ -1112,6 +1146,13 @@ packages:
         integrity: sha512-RdR9FQrFwNBNXAr4GixM8YaRZRJ5PUWbKYbE5eOsrwAjJW0q2REGcf79oYPsLyskQCZG1PLN+S/K1V00joZAoQ==,
       }
 
+  path-key@3.1.1:
+    resolution:
+      {
+        integrity: sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==,
+      }
+    engines: { node: ">=8" }
+
   pathe@2.0.3:
     resolution:
       {
@@ -1145,6 +1186,13 @@ packages:
       }
     engines: { node: ^10 || ^12 || >=14 }
 
+  postgres@3.4.9:
+    resolution:
+      {
+        integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==,
+      }
+    engines: { node: ">=12" }
+
   prettier@3.9.6:
     resolution:
       {
@@ -1174,6 +1222,20 @@ packages:
       {
         integrity: sha512-ePa+XGk00/3HuCqrEnK3LxJW7I0SdNg6EFzKUJG73hMAdDcOUC/i/aSz7LSDwLrGr33kal/rqOGydzwl6U7zBA==,
       }
+
+  shebang-command@2.0.0:
+    resolution:
+      {
+        integrity: sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==,
+      }
+    engines: { node: ">=8" }
+
+  shebang-regex@3.0.0:
+    resolution:
+      {
+        integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==,
+      }
+    engines: { node: ">=8" }
 
   siginfo@2.0.0:
     resolution:
@@ -1455,6 +1517,14 @@ packages:
       jsdom:
         optional: true
 
+  which@2.0.2:
+    resolution:
+      {
+        integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==,
+      }
+    engines: { node: ">= 8" }
+    hasBin: true
+
   why-is-node-running@2.3.0:
     resolution:
       {
@@ -1506,6 +1576,8 @@ snapshots:
   "@ai-sdk/provider@4.0.7":
     dependencies:
       json-schema: 0.4.0
+
+  "@electric-sql/pglite@0.5.4": {}
 
   "@esbuild/aix-ppc64@0.28.2":
     optional: true
@@ -1589,6 +1661,10 @@ snapshots:
 
   "@napi-rs/lzma-linux-x64-gnu@1.5.1":
     optional: true
+
+  "@opencode-ai/sdk@1.18.16":
+    dependencies:
+      cross-spawn: 7.0.6
 
   "@oxc-project/types@0.143.0": {}
 
@@ -1795,11 +1871,19 @@ snapshots:
 
   consola@3.4.2: {}
 
+  cross-spawn@7.0.6:
+    dependencies:
+      path-key: 3.1.1
+      shebang-command: 2.0.0
+      which: 2.0.2
+
   crossws@0.4.10(srvx@0.11.22):
     optionalDependencies:
       srvx: 0.11.22
 
-  db0@0.3.4: {}
+  db0@0.3.4(@electric-sql/pglite@0.5.4):
+    optionalDependencies:
+      "@electric-sql/pglite": 0.5.4
 
   debug@4.4.3:
     dependencies:
@@ -1849,10 +1933,10 @@ snapshots:
     dependencies:
       "@types/estree": 1.0.9
 
-  eve@0.31.3(ai@7.0.58(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
+  eve@0.31.3(@electric-sql/pglite@0.5.4)(ai@7.0.58(zod@4.4.3))(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
     dependencies:
       ai: 7.0.58(zod@4.4.3)
-      nitro: 3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
+      nitro: 3.0.260610-beta(@electric-sql/pglite@0.5.4)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11))
       undici: 8.9.0
     transitivePeerDependencies:
       - "@azure/app-configuration"
@@ -1918,6 +2002,8 @@ snapshots:
 
   httpxy@0.5.5: {}
 
+  isexe@2.0.0: {}
+
   js-tokens@9.0.1: {}
 
   json-schema@0.4.0: {}
@@ -1934,11 +2020,11 @@ snapshots:
 
   nf3@0.3.23: {}
 
-  nitro@3.0.260610-beta(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
+  nitro@3.0.260610-beta(@electric-sql/pglite@0.5.4)(rollup@4.62.4)(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.11)):
     dependencies:
       consola: 3.4.2
       crossws: 0.4.10(srvx@0.11.22)
-      db0: 0.3.4
+      db0: 0.3.4(@electric-sql/pglite@0.5.4)
       env-runner: 0.1.16
       h3: 2.0.1-rc.22(crossws@0.4.10(srvx@0.11.22))
       hookable: 6.1.1
@@ -1949,7 +2035,7 @@ snapshots:
       rolldown: 1.2.3
       srvx: 0.11.22
       unenv: 2.0.0-rc.24
-      unstorage: 2.0.0-alpha.7(db0@0.3.4)(ofetch@2.0.0-alpha.3)
+      unstorage: 2.0.0-alpha.7(db0@0.3.4(@electric-sql/pglite@0.5.4))(ofetch@2.0.0-alpha.3)
     optionalDependencies:
       rollup: 4.62.4
       vite: 7.3.6(@types/node@24.13.3)(tsx@4.23.11)
@@ -1993,6 +2079,8 @@ snapshots:
 
   ohash@2.0.11: {}
 
+  path-key@3.1.1: {}
+
   pathe@2.0.3: {}
 
   pathval@2.0.1: {}
@@ -2006,6 +2094,8 @@ snapshots:
       nanoid: 3.3.18
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postgres@3.4.9: {}
 
   prettier@3.9.6: {}
 
@@ -2063,6 +2153,12 @@ snapshots:
 
   rou3@0.8.1: {}
 
+  shebang-command@2.0.0:
+    dependencies:
+      shebang-regex: 3.0.0
+
+  shebang-regex@3.0.0: {}
+
   siginfo@2.0.0: {}
 
   source-map-js@1.2.1: {}
@@ -2110,9 +2206,9 @@ snapshots:
     dependencies:
       pathe: 2.0.3
 
-  unstorage@2.0.0-alpha.7(db0@0.3.4)(ofetch@2.0.0-alpha.3):
+  unstorage@2.0.0-alpha.7(db0@0.3.4(@electric-sql/pglite@0.5.4))(ofetch@2.0.0-alpha.3):
     optionalDependencies:
-      db0: 0.3.4
+      db0: 0.3.4(@electric-sql/pglite@0.5.4)
       ofetch: 2.0.0-alpha.3
 
   vite-node@3.2.4(@types/node@24.13.3)(tsx@4.23.11):
@@ -2189,6 +2285,10 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  which@2.0.2:
+    dependencies:
+      isexe: 2.0.0
 
   why-is-node-running@2.3.0:
     dependencies:
