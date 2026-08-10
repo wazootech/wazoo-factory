@@ -323,7 +323,9 @@ export class FunctionReviewAdapter implements ReviewAdapter {
 }
 
 export interface SandboxHandle {
-  run(options: { command: string }): PromiseLike<{ exitCode: number; stdout: string; stderr: string }>;
+  run(options: {
+    command: string;
+  }): PromiseLike<{ exitCode: number; stdout: string; stderr: string }>;
   readTextFile(options: { path: string }): PromiseLike<string | null>;
   writeTextFile(options: { path: string; content: string }): PromiseLike<void>;
 }
