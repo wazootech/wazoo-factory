@@ -50,6 +50,24 @@ authenticated principals, scoped approvals, artifact digests, expiry, single
 use, revision checks, audit events, and credential isolation. Merge and deploy
 remain unavailable to the first hosted tracer bullet.
 
+## Platform Relationship & Decoupled Execution
+
+The factory architecture intentionally decouples the sovereign execution engine
+(`wazoo-factory`) from external conversational platform gateways (such as Zo
+Computer or `zocomputer-bot`).
+
+- **Sovereignty & Isolation**: `wazoo-factory` owns the local workspace
+  mechanics (`wspace`), git worktrees, Vercel Sandbox execution boundary,
+  approval gates, and Postgres audit trails.
+- **Platform Ingress**: External platforms (like Zo or Discord bots) serve
+  strictly as thin ingress/trigger channels over the authenticated HTTP
+  session interface (`FACTORY_SERVICE_TOKEN`). They do not execute sandbox code,
+  manage repository state directly, or bypass factory security boundaries.
+- **Cost & Control Governance**: This separation guarantees that model routing,
+  token cost governance, sandbox isolation, and audit persistence remain under
+  Wazoo infrastructure control rather than being locked into third-party
+  platform runtimes.
+
 ## Deployment
 
 The target runtime is Eve's documented Vercel deployment path. Long-running
