@@ -50,7 +50,7 @@ export interface LiveAdapterOptions {
 
 export async function createLiveGenerate(options: LiveAdapterOptions) {
   const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-  const { generateObject } = await import("ai");
+  const { generateObject, NoObjectGeneratedError } = await import("ai");
   const provider = createOpenAICompatible({
     name: "opencode-zen",
     baseURL: options.baseUrl,
@@ -60,12 +60,34 @@ export async function createLiveGenerate(options: LiveAdapterOptions) {
     system: string;
     prompt: string;
   }): Promise<unknown> => {
-    const result = await generateObject({
-      model: provider.chatModel(options.modelId),
-      schema: Classification,
-      system: params.system,
-      prompt: params.prompt,
-    });
-    return result.object;
+    try {
+      const result = await generateObject({
+        model: provider.chatModel(options.modelId),
+        schema: Classification,
+        system: params.system,
+        prompt: params.prompt,
+      });
+      return result.object;
+    } catch (error) {
+      // Small models occasionally wrap valid JSON in prose or fences, which
+      // fails structured generation. Salvage the outermost JSON object; the
+      // caller's zod parse still enforces the full contract, so this only
+      // rescues formatting near-misses, never invalid classifications.
+      if (
+        NoObjectGeneratedError.isInstance(error) &&
+        typeof error.text === "string"
+      ) {
+        const start = error.text.indexOf("{");
+        const end = error.text.lastIndexOf("}");
+        if (start !== -1 && end > start) {
+          try {
+            return JSON.parse(error.text.slice(start, end + 1));
+          } catch {
+            // fall through to the original error
+          }
+        }
+      }
+      throw error;
+    }
   };
 }
