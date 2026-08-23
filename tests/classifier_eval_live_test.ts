@@ -58,30 +58,44 @@ describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
 
       // Free-tier gateways are slow (x-preview-f-free measured ~80s per
       // classifier-sized completion) so the run overlaps a small bounded
-      // number of requests instead of walking cases sequentially.
+      // number of requests instead of walking cases sequentially, and each
+      // case retries with backoff because the shared free endpoint answers
+      // 503 "Endpoint is unavailable" under load.
       const concurrency = Math.max(
         1,
-        Number(process.env.CLASSIFIER_EVAL_CONCURRENCY ?? 6),
+        Number(process.env.CLASSIFIER_EVAL_CONCURRENCY ?? 4),
       );
+      const attempts = Math.max(
+        1,
+        Number(process.env.CLASSIFIER_EVAL_ATTEMPTS ?? 4),
+      );
+      const backoffMs = [10_000, 25_000, 50_000];
       const queue = [...cases];
       const classifyCase = async (kase: (typeof cases)[number]) => {
-        const result = await classify({
-          repository: kase.repository,
-          title: kase.title,
-          body: kase.body,
-        });
-        if (!result.success) {
+        let lastError = "";
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+          const result = await classify({
+            repository: kase.repository,
+            title: kase.title,
+            body: kase.body,
+          });
+          if (result.success) {
+            predictions.push({
+              id: kase.id,
+              repository: kase.repository,
+              gold: kase.gold,
+              prediction: result.classification,
+            });
+            return;
+          }
           // Keep going: one flaky generation must not destroy the run's
           // evidence. The assertion below fails only after artifacts land.
-          failures.push(`${kase.id}: ${result.error}`);
-          return;
+          lastError = `${kase.id}: ${result.error}`;
+          if (attempt < attempts) {
+            await new Promise((r) => setTimeout(r, backoffMs[attempt - 1]));
+          }
         }
-        predictions.push({
-          id: kase.id,
-          repository: kase.repository,
-          gold: kase.gold,
-          prediction: result.classification,
-        });
+        failures.push(lastError);
       };
       await Promise.all(
         Array.from(
