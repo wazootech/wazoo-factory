@@ -15,12 +15,14 @@ import type { Classification } from "../factory/classifier-eval/schema.ts";
 // Live eval per the #39 resolution. Gated on credentials so CI never calls a
 // model; run manually with any OpenAI-compatible gateway:
 //   CLASSIFIER_EVAL_BASE_URL=... CLASSIFIER_EVAL_API_KEY=... \
-//   [CLASSIFIER_EVAL_MODEL=opencode/x-preview-f-free] \
+//   [CLASSIFIER_EVAL_MODEL=x-preview-f-free] \
 //   pnpm vitest run tests/classifier_eval_live_test.ts
+//
+// CLASSIFIER_EVAL_MODEL is the gateway wire id (no "opencode/" app-config
+// prefix): createLiveGenerate passes it verbatim to the provider.
 const baseUrl = process.env.CLASSIFIER_EVAL_BASE_URL;
 const apiKey = process.env.CLASSIFIER_EVAL_API_KEY;
-const modelId =
-  process.env.CLASSIFIER_EVAL_MODEL ?? "opencode/x-preview-f-free";
+const modelId = process.env.CLASSIFIER_EVAL_MODEL ?? "x-preview-f-free";
 const liveEnabled = Boolean(baseUrl && apiKey);
 
 interface PredictionRecord {
