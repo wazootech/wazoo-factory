@@ -14,5 +14,10 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["agent/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "agent/**/*.ts",
+    "factory/classifier-eval/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

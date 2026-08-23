@@ -1,0 +1,372 @@
+{
+  "modelId": "x-preview-f-free",
+  "ranAt": "2026-08-23T23:43:10.834Z",
+  "gateSummary": {
+    "gate": 0.8,
+    "total": 40,
+    "atOrAbove": 26,
+    "below": 14
+  },
+  "predictions": [
+    {
+      "id": "linked-markdown-py-2",
+      "repository": "wazootech/linked-markdown-py",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.9,
+        "rationale": "The issue requests publishing the package to PyPI so it becomes installable via pip/uv, which is a new capability for the repository rather than a defect or documentation fix. The pre-flight checks, trusted publisher setup, tagging workflow, and post-publish verification all support enabling this new distribution use case."
+      }
+    },
+    {
+      "id": "linked-markdown-11",
+      "repository": "wazootech/linked-markdown",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.72,
+        "rationale": "The issue proposes replacing a working custom regex extractor with the python-frontmatter library to improve robustness (\r\n, BOM, format fallback) and align implementations, framed as 'Motivation'/'Proposed Change' rather than a failure report. No crash, regression, or violation of documented behavior is described; the brittle regex still functions for its supported inputs. The closing decision question about growing parse.py's API surface further signals an enhancement/design request rather than a defect."
+      }
+    },
+    {
+      "id": "docs.wazoo.dev-132",
+      "repository": "wazootech/docs.wazoo.dev",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.98,
+        "rationale": "The issue requests creating a new guide in the docs.wazoo.dev repository, including content structure, style guidelines, and navigation updates. All proposed work concerns documentation (guides, examples, links), not fixing broken software or adding product capability."
+      }
+    },
+    {
+      "id": "workspace-106",
+      "repository": "wazootech/workspace",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.6,
+        "rationale": "Nothing is reported broken, so this is not a bug; the issue is a research spike scoping collision risk before landing new prefixed harness skills ('wazootech_pick-issue', packaged bare names), i.e., groundwork enabling a new capability rollout. Its deliverable is investigative findings (inventory, origin-preservation check, go/no-go verdict) rather than a direct documentation edit, though the results will feed rollout notes and risk statements."
+      }
+    },
+    {
+      "id": "linked-markdown-ts-2",
+      "repository": "wazootech/linked-markdown-ts",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.92,
+        "rationale": "The issue requests new capability: making the package installable by publishing to JSR and adding a release CI workflow, with no report of broken behavior. The README badge update is incidental; the core goal is distribution support, which fits 'feature'."
+      }
+    },
+    {
+      "id": "wazoo-api-38",
+      "repository": "wazootech/wazoo-api",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.8,
+        "rationale": "The issue asks to migrate existing account-deletion fetch calls to the new worldsAdminClient helper and align import style — an enhancement/refactor of working code, not a report of breakage or wrong behavior. No crash, regression, or incorrect output is described, ruling out 'bug', and it concerns code rather than documentation."
+      }
+    },
+    {
+      "id": "wazoo-client-ts-1",
+      "repository": "wazootech/wazoo-client-ts",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.88,
+        "rationale": "The issue is a proposal to migrate the build/dev toolchain from Node/tsx/tsc to Deno, explicitly framed as 'Summary / Proposal' with planned changes and checkboxes — nothing is reported as broken or producing wrong results. It requests new capability/enhancement of the repository's tooling rather than a defect fix or documentation improvement."
+      }
+    },
+    {
+      "id": "memsdk-6",
+      "repository": "wazootech/memsdk",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.96,
+        "rationale": "The issue requests new capability: exposing Supermemory's new callable top-level search (POST /v4/search) in SupermemoryInterface and adding an e2e scenario for it, explicitly framed as 'Neither supports the new top-level callable search.' Nothing is described as broken or producing wrong results; existing sub-resource calls still work, so this is an enhancement for a new upstream API surface rather than a defect or documentation fix."
+      }
+    },
+    {
+      "id": "wiki-251",
+      "repository": "wazootech/wiki",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.85,
+        "rationale": "The issue tracks rolling out a newly introduced wiki-sync default (drift-free minimal style) to other repositories' code wikis, including audits, per-repo opt-in confirmation, and a potential shared CI guardrail — i.e., extending existing capability to new consumers rather than fixing broken behavior. While one checklist item touches SKILL.md documentation, that is incidental; the deciding signal is 'this issue tracks the rollout policy' for applying the new defaults."
+      }
+    },
+    {
+      "id": "wazoo.dev-8",
+      "repository": "wazootech/wazoo.dev",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.95,
+        "rationale": "The issue is explicitly labeled 'feat:' and framed as a 'Proposal' to implement a new deterministic static shortlink resolver build step using @fartlabs/go. While it mentions the GitHub Pages case-sensitivity problem as motivation, the core content requests new capability (shortlink config, redirect generation, extensible go-link system) rather than reporting broken behavior in the repository itself."
+      }
+    },
+    {
+      "id": "wazoopedia-11",
+      "repository": "wazootech/wazoopedia",
+      "prediction": {
+        "category": "bug",
+        "confidence": 0.72,
+        "rationale": "The issue reports that frontmatter in existing files is invalid and 'isn't rendering properly,' meaning the files are broken and produce wrong output contrary to intended behavior. The requested fix is to repair the corrupted frontmatter, not to add new capability or improve documentation quality. The deciding signal is the explicit statement that the frontmatter is invalid for some reason."
+      }
+    },
+    {
+      "id": "worlds-cloudflare-24",
+      "repository": "wazootech/worlds-cloudflare",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.92,
+        "rationale": "The issue is a planned refactoring/enhancement to adopt the shared @worlds/sqlite/sql-core layer and delete duplicated local copies; nothing is reported as broken or misbehaving. Its checklist of adoption steps, re-exports for compat, and CI verification signals a capability/maintenance enhancement rather than a defect fix or documentation change."
+      }
+    },
+    {
+      "id": "wiki-templates-39",
+      "repository": "wazootech/wiki-templates",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.95,
+        "rationale": "The issue requests adding a new 'workspace-cli' template to the repository, describing new capability (multi-repo workspace composition with wspace commands like check and worktree add) rather than reporting broken behavior or fixing existing docs. The title's imperative 'Add ... template' plus the Goal/Why-this-matters framing are classic enhancement-request signals."
+      }
+    },
+    {
+      "id": "worlds-indexeddb-9",
+      "repository": "wazootech/worlds-indexeddb",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.95,
+        "rationale": "The issue is explicitly framed as a 'Proposal' to add a new './testing' export entrypoint that re-exports the fake-indexeddb polyfill, which is a request for new capability rather than a defect report. No broken behavior, crash, or wrong result is described; the deciding signal is the proposed new exports mapping and testing.ts file."
+      }
+    },
+    {
+      "id": "worlds-client-ts-3",
+      "repository": "wazootech/worlds-client-ts",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.74,
+        "rationale": "The issue plans a deliberate enhancement: repointing the sync-openapi fallback from raw.githubusercontent.com to worlds-api.wazoo.dev once prod and main specs align, explicitly framed as 'the underlying goal stands' after reverting an experimental tweak. Nothing in the repo is reported as broken or misbehaving against intent; the CI failure was self-inflicted by the temporary change and already fixed via revert. The deciding signal is the requested capability change (more robust fallback source) plus prerequisite spec-sync work, which fits feature rather than bug."
+      }
+    },
+    {
+      "id": "worlds-sdk-ts-198",
+      "repository": "wazootech/worlds-sdk-ts",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.97,
+        "rationale": "The title is prefixed 'Docs:' and the body reports that documentation tables (README backend table, ARCHITECTURE.md) contain stale statuses versus actual repo versions. Acceptance criteria only require verifying and correcting doc rows with links, with no code change requested."
+      }
+    },
+    {
+      "id": "worlds-api-46",
+      "repository": "wazootech/worlds-api",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.8,
+        "rationale": "The issue requests wiring an existing AbortSignal capability into the /worlds/:id/sparql route so queries cancel on client disconnect — a new behavior/capability ('this is just the missing link'), not a regression or incorrect output. While it notes wasted CPU as motivation, the concrete asks are dependency bumps and code changes to forward the signal, which is an enhancement rather than a fix of broken functionality."
+      }
+    },
+    {
+      "id": "wazoo-console-68",
+      "repository": "wazootech/wazoo-console",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.97,
+        "rationale": "The issue asks to extend an existing quota banner pattern into a reusable component and apply it to new surfaces (usage limits, billing caps) with consistent copy — this is a request for new capability and enhancement, not a report of broken behavior. No crash, regression, or incorrect result is described; acceptance criteria all describe building new UI coverage. Documentation is not the subject of the request."
+      }
+    },
+    {
+      "id": "worlds-postgres-36",
+      "repository": "wazootech/worlds-postgres",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.87,
+        "rationale": "The issue's stated expected outcome is 'document non-alignment', and its acceptance criteria consist solely of written adopt/skip decisions plus cross-linking that decision from the SDK's ARCHITECTURE.md. No new capability, code change, or defect fix is requested — even the portable-policy questions resolve into documentation artifacts. This makes it a documentation/research-record request rather than a bug or feature."
+      }
+    },
+    {
+      "id": "worlds-sqlite-17",
+      "repository": "wazootech/worlds-sqlite",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.62,
+        "rationale": "The issue is a proactive maintenance task asking to run `deno update --latest`, verify CI/benches still pass, and 'fix forward for small breakage' — nothing is currently reported as broken, so it is not a bug. It is also not about documentation. Among the available categories, a dependency-upgrade/enhancement request fits best as a feature."
+      }
+    },
+    {
+      "id": "wazoo-factory-40",
+      "repository": "wazootech/wazoo-factory",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.92,
+        "rationale": "The issue is a design/planning ticket requesting definition of a new deterministic quality-gate matrix that the verification phase will execute against, including per-category gate sets, severity rules, and ordering — i.e., a request for new capability/enhancement. There is no report of broken behavior or wrong results, ruling out 'bug', and it concerns pipeline logic rather than documentation content, ruling out 'docs'."
+      }
+    },
+    {
+      "id": "wazoo-memorybench-32",
+      "repository": "wazootech/wazoo-memorybench",
+      "prediction": {
+        "category": "bug",
+        "confidence": 0.75,
+        "rationale": "The issue documents existing misbehavior: an empty DEEPSEEK_API_KEY silently falls back to OPENAI_API_KEY against api.deepseek.com, which is contrary to intended provider isolation ('No loud failure, no clear message'). The requested change—failing fast with a named error—is a correction of this broken silent-fallback path rather than a new capability or documentation item."
+      }
+    },
+    {
+      "id": "sparql-engine-185",
+      "repository": "wazootech/sparql-engine",
+      "prediction": {
+        "category": "bug",
+        "confidence": 0.97,
+        "rationale": "The issue documents a concrete defect: termKey's unescaped '|' delimiter makes distinct literals serialize to identical keys, causing silent overwrites/dedup failures in sqlite/indexeddb stores. That is broken behavior contrary to intended injectivity of the key function, with a proposed fix and regression tests requested."
+      }
+    },
+    {
+      "id": "docs.wazoo.dev-131",
+      "repository": "wazootech/docs.wazoo.dev",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.85,
+        "rationale": "The issue reports automated drift on a documentation site branch, flagged by prettier formatting, Mintlify validation, and broken-link checks. All signals point to defects in documentation content that need fixing, matching the docs category rather than a code bug or feature request."
+      }
+    },
+    {
+      "id": "workspace-cli-33",
+      "repository": "wazootech/workspace-cli",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.99,
+        "rationale": "The issue explicitly requests new capability ('feat:' prefix) for recursive sub-workspaces with schema v2 nested manifest discovery, including design proposals and schema changes. Nothing in the text reports broken behavior or documentation problems; it is purely an enhancement proposal."
+      }
+    },
+    {
+      "id": "workspace-105",
+      "repository": "wazootech/workspace",
+      "prediction": {
+        "category": "bug",
+        "confidence": 0.62,
+        "rationale": "The issue targets an explicitly 'accidental' nested checkout and stray compiled artifacts — unintended repository state that should not exist and must be removed after verification, which is remediation of a wrong state rather than a new capability or documentation change. The formatter-only drift confirmation further shows nothing functional is being added. It is a cleanup/chore, but among the three options it best fits correcting something that is wrong."
+      }
+    },
+    {
+      "id": "linked-markdown-10",
+      "repository": "wazootech/linked-markdown",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.72,
+        "rationale": "The issue proposes redefining what the conformance suite asserts (strict flat JSON-LD fixtures, updated LMD-Core tier definitions in manifest.) and deprecating legacy envelope expectations, which is an enhancement/change to project requirements rather than a report of broken behavior. Although it touches spec/index.md and glossary text, the deciding signal is the requested change to test fixture expectations and tier rules, going beyond pure documentation."
+      }
+    },
+    {
+      "id": "wazoo-console-57",
+      "repository": "wazootech/wazoo-console",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.88,
+        "rationale": "The issue requests adding new UI elements (privacy/terms links and a data-collection statement) to the signup screen, which is an enhancement rather than a defect report. Nothing in the text describes broken behavior, crashes, or wrong results. While it references legal pages, the change itself targets application functionality, not documentation content."
+      }
+    },
+    {
+      "id": "wazoo-api-36",
+      "repository": "wazootech/wazoo-api",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.72,
+        "rationale": "The issue requests replacing working hand-rolled fetch calls with a generated type-safe client, which is an enhancement/refactor rather than a report of broken behavior. No crash, wrong result, or regression in wazoo-api itself is described; the actorNotAuthorized note is only a dependency blocker for publishing @worlds/client. Since it asks for improved implementation (type safety via generated client) without changing platform-policy logic, it best matches 'enhancement' under feature."
+      }
+    },
+    {
+      "id": "wiki-templates-2",
+      "repository": "wazootech/wiki-templates",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.9,
+        "rationale": "The issue requests adding a new CI workflow to validate template files and run wiki checks, which is a new capability/enhancement rather than a report of broken behavior or a documentation fix. The deciding signal is the explicit ask to 'Add a workflow' because none exists."
+      }
+    },
+    {
+      "id": "worlds-libsql-29",
+      "repository": "wazootech/worlds-libsql",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.78,
+        "rationale": "The issue is a forward-looking plan to add support for the new hashQuad ID scheme (backup, re-key tables, chunk remap), not a report of current breakage, crashes, or wrong results. Its 'Plan'/'Ordering' structure and references to related migrations indicate requested engineering work to enable a new upstream capability. No documentation fixes are requested."
+      }
+    },
+    {
+      "id": "wiki-249",
+      "repository": "wazootech/wiki",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.88,
+        "rationale": "The issue proposes changing the wiki-sync skill's default documentation policy to be drift-free, with line numbers and machine-specific numbers becoming opt-in and configurable per repo. Nothing is broken or producing wrong results relative to current intent; this is a request for new configurable capability and a behavioral enhancement. Although it touches documentation style, the deciding signal is the explicit opt-in/configurable-policy proposal, which is an enhancement rather than a doc fix."
+      }
+    },
+    {
+      "id": "wazoo.dev-6",
+      "repository": "wazootech/wazoo.dev",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.72,
+        "rationale": "The issue requests creating a 'design.md' file for the site, which is a request for design/reference documentation rather than a code fix or new functionality. The deciding signal is the filename itself ('design.md'), indicating documentation deliverable. The tweet link provides no evidence of a bug or feature request."
+      }
+    },
+    {
+      "id": "worlds-indexeddb-6",
+      "repository": "wazootech/worlds-indexeddb",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.95,
+        "rationale": "The issue requests restructuring the README's Install section into a standardized two-tier format (package managers + CDN examples), which is purely a documentation improvement. No broken behavior or new runtime capability is described; the deliverable is replacement markdown content."
+      }
+    },
+    {
+      "id": "worlds-sdk-ts-194",
+      "repository": "wazootech/worlds-sdk-ts",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.65,
+        "rationale": "The issue proactively requests bumping all dependencies via `deno update --latest`, which is an enhancement/maintenance task rather than a report of anything broken, regressed, or misdocumented. No defect or wrong behavior is described, ruling out bug, and no documentation content is involved, ruling out docs."
+      }
+    },
+    {
+      "id": "worlds-libsql-27",
+      "repository": "wazootech/worlds-libsql",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.97,
+        "rationale": "The issue requests restructuring and expanding the README's Install section with package-manager commands, esm.sh CDN examples, and import maps — pure documentation content changes. No runtime behavior, crash, or new library capability is involved; Usage and Development sections are explicitly left untouched."
+      }
+    },
+    {
+      "id": "worlds-cloudflare-23",
+      "repository": "wazootech/worlds-cloudflare",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.88,
+        "rationale": "The issue requests adopting a shared sql-core plan layer to deduplicate existing working logic ('dedupe third copy'), with acceptance criteria centered on recording adopt/keep-local decisions and filing an implementation follow-up — an enhancement/refactoring effort, not a defect. Nothing in the text reports breakage, crashes, or behavior contrary to intent, ruling out 'bug'. The only docs reference is a cross-link to a ticket filed in another repo, so this issue itself is not a documentation change."
+      }
+    },
+    {
+      "id": "worlds-sqlite-12",
+      "repository": "wazootech/worlds-sqlite",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.95,
+        "rationale": "The issue requests restructuring and expanding the 'Install' section with specific markdown content, which is a documentation improvement rather than a code change. It explicitly states Usage and Development sections stay untouched, confirming the scope is purely documentation."
+      }
+    },
+    {
+      "id": "worlds-postgres-29",
+      "repository": "wazootech/worlds-postgres",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.65,
+        "rationale": "The issue is a proactive maintenance request to run 'deno update --latest' and bump all dependencies, not a report of anything broken or wrong results. It also contains no documentation-related content. Under the three-way taxonomy, a dependency-upgrade/enhancement task fits best as a feature request."
+      }
+    },
+    {
+      "id": "worlds-api-34",
+      "repository": "wazootech/worlds-api",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.62,
+        "rationale": "No defect or regression is reported; the scan suggests storage is already private and the issue asks for a proactive verification task of the access model. The primary deliverable is new assurance work (checking auth on reads, import/export, and presigned URLs) rather than fixing something broken or improving documentation, whose mention is only a close-out step."
+      }
+    }
+  ]
+}
