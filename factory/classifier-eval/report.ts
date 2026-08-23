@@ -1,4 +1,6 @@
-import type { ScoreReport, ScoredCase } from "./score.ts";
+import type { Category } from "./score.ts";
+import { IssueCategory } from "./schema.ts";
+import type { GateSummary, ScoreReport, ScoredCase } from "./score.ts";
 
 export interface RationaleSample {
   id: string;
@@ -10,24 +12,32 @@ export interface RenderReportInput {
   ranAt: Date;
   report: ScoreReport;
   rationales?: RationaleSample[];
+  /** Gate stats over every classified case when they differ from the gold subset. */
+  gateSummary?: GateSummary;
 }
 
-const CATEGORIES = ["bug", "feature", "docs"] as const;
+const CATEGORIES = IssueCategory.options;
 
 function renderCaseRow(item: ScoredCase): string {
-  return [
+  return (
     `- \`${item.id}\`: gold=\`${item.gold}\` predicted=\`${item.predicted}\`` +
-      ` confidence=${item.confidence.toFixed(2)}` +
-      ` auto-label=${item.wouldAutoLabel ? "yes" : "no"}`,
-  ].join("");
+    ` confidence=${item.confidence.toFixed(2)}` +
+    ` auto-label=${item.wouldAutoLabel ? "yes" : "no"}`
+  );
 }
 
 // Deterministic markdown report committed under tests/fixtures/classifier/results/.
 export function renderReport(input: RenderReportInput): string {
   const { modelId, ranAt, report } = input;
+  const gate = input.gateSummary ?? {
+    gate: report.autoLabelGate,
+    total: report.total,
+    atOrAbove: report.autoLabeledCount,
+    below: report.belowGateCount,
+  };
   const lines: string[] = [];
 
-  lines.push(`# Classifier eval — ${modelId}`);
+  lines.push(`# Classifier eval - ${modelId}`);
   lines.push("");
   lines.push(`- Ran at: ${ranAt.toISOString()}`);
   lines.push(`- Fixtures scored: ${report.total}`);
@@ -35,8 +45,8 @@ export function renderReport(input: RenderReportInput): string {
     `- Accuracy: ${(report.accuracy * 100).toFixed(1)}% (${report.correct}/${report.total})`,
   );
   lines.push(
-    `- Auto-label gate: ${report.autoLabelGate.toFixed(2)} — would label ` +
-      `${report.autoLabeledCount}, below gate ${report.belowGateCount}`,
+    `- Auto-label gate: ${gate.gate.toFixed(2)} - would label ${gate.atOrAbove}` +
+      `, below gate ${gate.below} (of ${gate.total} classified)`,
   );
   lines.push("");
   lines.push("## Confusion matrix (rows = gold, columns = predicted)");

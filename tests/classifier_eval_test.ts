@@ -85,6 +85,13 @@ describe("countSentences", () => {
       countSentences("What happened here? It broke! Then we fixed it."),
     ).toBe(3);
   });
+
+  it("does not split decimals, versions, or abbreviations", () => {
+    expect(countSentences("Version 1.2 shipped the fix.")).toBe(1);
+    expect(countSentences("See e.g. the README for details")).toBe(1);
+    expect(countSentences("Confidence is 0.85 here. Done.")).toBe(2);
+    expect(countSentences("Refs #39. Fixed elsewhere.")).toBe(2);
+  });
 });
 
 describe("CasesFile", () => {

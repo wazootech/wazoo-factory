@@ -22,5 +22,3 @@ export async function loadCases(path: string): Promise<LoadedCases> {
   }
   return { truthed, untruthed };
 }
-
-export type { CaseFile, IssueCategory };

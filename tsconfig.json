@@ -17,6 +17,7 @@
   "include": [
     "agent/**/*.ts",
     "factory/classifier-eval/**/*.ts",
+    "scripts/**/*.ts",
     "tests/**/*.ts"
   ]
 }

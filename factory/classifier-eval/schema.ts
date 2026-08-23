@@ -6,15 +6,22 @@ export const IssueCategory = z.enum(["bug", "feature", "docs"]);
 export type IssueCategory = z.infer<typeof IssueCategory>;
 
 // The rationale cap is enforced with a deterministic sentence splitter so
-// graders and models agree on what counts as a sentence.
+// graders and models agree on what counts as a sentence. A terminator sitting
+// between alphanumeric characters (decimals like 1.2, abbreviations like
+// e.g.) does not end a sentence, and neither does one followed by a word
+// starting lowercase (continuation).
 export function countSentences(text: string): number {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
     return 0;
   }
-  return trimmed
+  // Non-boundary terminators are consumed (replaced with a sentinel) so the
+  // split below only ever sees true sentence endings.
+  let guarded = trimmed.replace(/([a-z0-9])[.!?](?=[a-z0-9])/gi, "$1\x00");
+  guarded = guarded.replace(/[.!?](?=\s+[a-z])/g, "\x00");
+  return guarded
     .split(/[.!?]+/)
-    .map((part) => part.trim())
+    .map((part) => part.replaceAll("\x00", "").trim())
     .filter((part) => part.length > 0).length;
 }
 

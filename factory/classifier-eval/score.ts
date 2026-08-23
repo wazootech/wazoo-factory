@@ -1,10 +1,16 @@
-import type { Classification, IssueCategory as Category } from "./schema.ts";
+import { IssueCategory, type Classification } from "./schema.ts";
 
-export type { IssueCategory as Category } from "./schema.ts";
+export type Category = (typeof IssueCategory.options)[number];
 
 // Provisional auto-label gate from the #39 resolution; recalibrate after the
 // baseline confusion data exists (#41).
 export const AUTO_LABEL_GATE = 0.8;
+
+export interface ScoreInput {
+  id: string;
+  gold: Category;
+  prediction: Classification;
+}
 
 export interface ScoredCase {
   id: string;
@@ -17,6 +23,28 @@ export interface ScoredCase {
 
 export type ConfusionMatrix = Record<Category, Record<Category, number>>;
 
+export interface GateSummary {
+  gate: number;
+  total: number;
+  atOrAbove: number;
+  below: number;
+}
+
+// Gate stats over an arbitrary set of confidences — the labeling decision on
+// real issues does not depend on whether a gold label happens to exist.
+export function summarizeGate(
+  predictions: ReadonlyArray<{ confidence: number }>,
+  gate: number = AUTO_LABEL_GATE,
+): GateSummary {
+  const atOrAbove = predictions.filter((p) => p.confidence >= gate).length;
+  return {
+    gate,
+    total: predictions.length,
+    atOrAbove,
+    below: predictions.length - atOrAbove,
+  };
+}
+
 export interface ScoreReport {
   total: number;
   correct: number;
@@ -28,25 +56,24 @@ export interface ScoreReport {
   misclassified: ScoredCase[];
 }
 
-const emptyRow = (): Record<Category, number> => ({
-  bug: 0,
-  feature: 0,
-  docs: 0,
-});
+function emptyRow(): Record<Category, number> {
+  return Object.fromEntries(IssueCategory.options.map((c) => [c, 0])) as Record<
+    Category,
+    number
+  >;
+}
+
+function emptyMatrix(): ConfusionMatrix {
+  return Object.fromEntries(
+    IssueCategory.options.map((c) => [c, emptyRow()]),
+  ) as ConfusionMatrix;
+}
 
 export function scorePredictions(
-  items: ReadonlyArray<{
-    id: string;
-    gold: Category;
-    prediction: Classification;
-  }>,
+  items: ReadonlyArray<ScoreInput>,
   autoLabelGate: number = AUTO_LABEL_GATE,
 ): ScoreReport {
-  const confusion: ConfusionMatrix = {
-    bug: emptyRow(),
-    feature: emptyRow(),
-    docs: emptyRow(),
-  };
+  const confusion = emptyMatrix();
   const misclassified: ScoredCase[] = [];
   let correct = 0;
   let autoLabeledCount = 0;
@@ -55,8 +82,7 @@ export function scorePredictions(
   for (const item of items) {
     const { category: predicted, confidence } = item.prediction;
     confusion[item.gold][predicted] += 1;
-    const isCorrect = predicted === item.gold;
-    if (isCorrect) {
+    if (predicted === item.gold) {
       correct += 1;
     } else {
       misclassified.push({

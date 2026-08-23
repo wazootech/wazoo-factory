@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { CasesFile, type CaseFile } from "../factory/classifier-eval/schema.ts";
+import type { GhIssuePayload } from "../factory/classifier-eval/pull.ts";
 
 interface CliOptions {
   manifest: string;
@@ -54,16 +55,8 @@ function loadManifestRepoNames(manifestPath: string): string[] {
   return [...new Set(names)];
 }
 
-interface GhIssueJson {
-  number: number;
-  title: string;
-  url: string;
-  body?: string | null;
-  labels?: Array<{ name: string }>;
-}
-
 // gh exits non-zero for repos without issues; treat as empty rather than fatal.
-function listClosedIssues(repository: string, limit: number): GhIssueJson[] {
+function listClosedIssues(repository: string, limit: number): GhIssuePayload[] {
   const result = spawnSync(
     "gh",
     [
@@ -84,7 +77,7 @@ function listClosedIssues(repository: string, limit: number): GhIssueJson[] {
     return [];
   }
   try {
-    return JSON.parse(result.stdout) as GhIssueJson[];
+    return JSON.parse(result.stdout) as GhIssuePayload[];
   } catch {
     return [];
   }
@@ -114,11 +107,11 @@ function mergeExistingGold(
 }
 
 export function roundRobinSelect(
-  pools: Map<string, GhIssueJson[]>,
+  pools: Map<string, GhIssuePayload[]>,
   total: number,
   perRepoCap: number,
-): Array<{ repository: string; issue: GhIssueJson }> {
-  const selected: Array<{ repository: string; issue: GhIssueJson }> = [];
+): Array<{ repository: string; issue: GhIssuePayload }> {
+  const selected: Array<{ repository: string; issue: GhIssuePayload }> = [];
   const takenPerRepo = new Map<string, number>();
   let exhausted = false;
   while (selected.length < total && !exhausted) {
@@ -129,7 +122,7 @@ export function roundRobinSelect(
       if (taken >= perRepoCap || taken >= issues.length) continue;
       exhausted = false;
       takenPerRepo.set(repository, taken + 1);
-      selected.push({ repository, issue: issues[taken] as GhIssueJson });
+      selected.push({ repository, issue: issues[taken] as GhIssuePayload });
     }
   }
   return selected;
@@ -139,7 +132,7 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const repoNames = loadManifestRepoNames(options.manifest);
 
-  const pools = new Map<string, GhIssueJson[]>();
+  const pools = new Map<string, GhIssuePayload[]>();
   for (const name of repoNames) {
     const repository = `wazootech/${name}`;
     const issues = listClosedIssues(repository, options.limitPerCall).filter(
