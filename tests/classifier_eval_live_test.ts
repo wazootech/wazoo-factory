@@ -35,7 +35,7 @@ interface PredictionRecord {
 describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
   it(
     "classifies every fixture through the provider and writes stamped artifacts",
-    { timeout: 900_000 },
+    { timeout: 3_600_000 },
     async () => {
       const { createLiveGenerate } =
         await import("../factory/classifier-eval/classify.ts");
@@ -56,7 +56,15 @@ describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
       const predictions: PredictionRecord[] = [];
       const failures: string[] = [];
 
-      for (const kase of cases) {
+      // Free-tier gateways are slow (x-preview-f-free measured ~80s per
+      // classifier-sized completion) so the run overlaps a small bounded
+      // number of requests instead of walking cases sequentially.
+      const concurrency = Math.max(
+        1,
+        Number(process.env.CLASSIFIER_EVAL_CONCURRENCY ?? 6),
+      );
+      const queue = [...cases];
+      const classifyCase = async (kase: (typeof cases)[number]) => {
         const result = await classify({
           repository: kase.repository,
           title: kase.title,
@@ -66,7 +74,7 @@ describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
           // Keep going: one flaky generation must not destroy the run's
           // evidence. The assertion below fails only after artifacts land.
           failures.push(`${kase.id}: ${result.error}`);
-          continue;
+          return;
         }
         predictions.push({
           id: kase.id,
@@ -74,7 +82,19 @@ describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
           gold: kase.gold,
           prediction: result.classification,
         });
-      }
+      };
+      await Promise.all(
+        Array.from(
+          { length: Math.min(concurrency, queue.length) },
+          async () => {
+            for (;;) {
+              const kase = queue.shift();
+              if (!kase) return;
+              await classifyCase(kase);
+            }
+          },
+        ),
+      );
 
       // Accuracy comes only from gold-labeled cases; every prediction is
       // persisted so re-scoring after truthing never needs a model re-run.
