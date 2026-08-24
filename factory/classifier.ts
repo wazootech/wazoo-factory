@@ -167,3 +167,40 @@ export async function createLiveGenerate(
     return output;
   };
 }
+
+/** Memoizing live-deps builder shared by the Eve tool and the webhook channel.
+ *  Env resolution stays lazy so merely importing consumers never requires
+ *  credentials to be present. */
+export function createLazyLiveDeps(): ClassifyIssueDeps {
+  let generatePromise: Promise<ClassifyIssueDeps["generate"]> | undefined;
+  let resolved: ResolvedLiveClassifier | undefined;
+  const resolve = (): ResolvedLiveClassifier => {
+    if (!resolved) resolved = resolveLiveClassifierEnv();
+    return resolved;
+  };
+  return {
+    get model() {
+      return resolve().model;
+    },
+    attempts: DEFAULT_ATTEMPTS,
+    delay: (ms) => new Promise((r) => setTimeout(r, ms)),
+    generate: (params) => {
+      const r = resolve();
+      if (!generatePromise) {
+        generatePromise = createLiveGenerate({
+          baseURL: r.baseURL,
+          apiKey: r.apiKey,
+          model: r.model,
+        });
+      }
+      return generatePromise.then((g) => g(params));
+    },
+  };
+}
+
+/** One-line structured audit record; replayable without a model re-run. */
+export function formatClassificationAudit(
+  result: ClassificationResult,
+): string {
+  return JSON.stringify(result);
+}

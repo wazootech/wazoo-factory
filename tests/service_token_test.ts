@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { serviceTokenAuth } from "@/agent/lib/service-token.ts";
 
 function requestWith(token: string | null): Request {

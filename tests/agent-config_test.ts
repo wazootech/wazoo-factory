@@ -1,4 +1,4 @@
-﻿import { readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import agent from "@/agent/agent.ts";
 import sandbox from "@/agent/sandbox/sandbox.ts";

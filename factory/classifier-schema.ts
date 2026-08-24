@@ -11,13 +11,21 @@ export { Classification, IssueCategory };
 
 // What the classify_issue Eve tool accepts: enough context for accurate
 // classification without excessive token usage. Unknown keys are stripped.
+// The caps double as ingestion clamps (webhook side) so oversized deliveries
+// fail validation never.
+export const TITLE_CAP = 200;
+export const LABEL_CAP = 50;
+export const BODY_CAP = 3000;
+export const REPOSITORY_CAP = 200;
+export const DESCRIPTION_CAP = 500;
+
 export const ClassificationInput = z.object({
   issueNumber: z.number().int().positive(),
-  title: z.string().min(1).max(200),
-  body: z.string().max(3000).default(""),
-  labels: z.array(z.string().max(50)).default([]),
-  repository: z.string().min(1).max(200),
-  repositoryDescription: z.string().max(500).default(""),
+  title: z.string().min(1).max(TITLE_CAP),
+  body: z.string().max(BODY_CAP).default(""),
+  labels: z.array(z.string().max(LABEL_CAP)).default([]),
+  repository: z.string().min(1).max(REPOSITORY_CAP),
+  repositoryDescription: z.string().max(DESCRIPTION_CAP).default(""),
 });
 export type ClassificationInput = z.infer<typeof ClassificationInput>;
 

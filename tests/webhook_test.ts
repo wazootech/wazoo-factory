@@ -1,4 +1,4 @@
-﻿import { createHmac } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   classifyWebhookEvent,
@@ -6,6 +6,8 @@ import {
   handleIssueWebhook,
   verifyGitHubSignature,
 } from "@/factory/webhook.ts";
+import { formatClassificationAudit } from "@/factory/classifier.ts";
+import type { ClassificationResult } from "@/factory/classifier-schema.ts";
 
 const SECRET = "whsec_test_123";
 
@@ -152,6 +154,19 @@ describe("classifyWebhookEvent", () => {
     if (r.action === "process") expect(r.input.body.length).toBe(3000);
   });
 
+  it("clamps title, labels, and repository description to schema caps", () => {
+    const p = JSON.parse(issuePayload());
+    p.issue.title = "T".repeat(400);
+    p.issue.labels = [{ name: "l".repeat(80) }, { name: "ok" }];
+    p.repository.description = "d".repeat(900);
+    const r = classifyWebhookEvent(ev(p));
+    expect(r.action).toBe("process");
+    if (r.action !== "process") return;
+    expect(r.input.title.length).toBe(200);
+    expect(r.input.labels).toEqual(["l".repeat(50), "ok"]);
+    expect(r.input.repositoryDescription.length).toBe(500);
+  });
+
   it("tolerates a missing issue body", () => {
     const p = JSON.parse(issuePayload());
     delete (p.issue as { body?: string }).body;
@@ -241,6 +256,32 @@ describe("handleIssueWebhook", () => {
   });
 });
 
+describe("formatClassificationAudit", () => {
+  it("serializes the full record, including rationale and input", () => {
+    const result: ClassificationResult = {
+      classification: {
+        category: "docs",
+        confidence: 0.7,
+        rationale: "Asks for a documentation refresh.",
+      },
+      input: {
+        issueNumber: 5,
+        title: "Docs stale",
+        body: "",
+        labels: [],
+        repository: "wazootech/wiki",
+        repositoryDescription: "",
+      },
+      model: "m",
+      classifiedAt: "2026-08-23T00:00:00.000Z",
+      schemaVersion: 1 as const,
+    };
+    const parsed = JSON.parse(formatClassificationAudit(result));
+    expect(parsed.classification.rationale).toContain("documentation");
+    expect(parsed.input.repository).toBe("wazootech/wiki");
+  });
+});
+
 describe("createRouteHandler", () => {
   function makeRequest(body: string, signature?: string): Request {
     const headers = new Headers({ "content-type": "application/json" });
@@ -280,6 +321,21 @@ describe("createRouteHandler", () => {
     });
     const res = await handler(makeRequest(issuePayload()), args() as never);
     expect(res.status).toBe(500);
+  });
+
+  it("returns 503 when the readiness probe throws, so GitHub redelivers", async () => {
+    const handler = createRouteHandler({
+      secret: SECRET,
+      allowedRepos: [],
+      onProcess: async () => {},
+      verifyReady: () => {
+        throw new Error("classifier requires OPENCODE_GO_API_KEY");
+      },
+    });
+    const a = args();
+    const res = await handler(makeRequest(issuePayload()), a as never);
+    expect(res.status).toBe(503);
+    expect(a.waited.length).toBe(0);
   });
 
   it("returns 202 and schedules background classification", async () => {

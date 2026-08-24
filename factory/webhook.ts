@@ -1,4 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  BODY_CAP,
+  DESCRIPTION_CAP,
+  LABEL_CAP,
+  REPOSITORY_CAP,
+  TITLE_CAP,
+} from "./classifier-schema.ts";
 
 // GitHub webhook ingestion (#35). Pure decision core here; the Eve channel in
 // agent/channels/github.ts is a thin composition over createRouteHandler.
@@ -13,8 +20,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // - failures after acceptance are logged, not retried by us (we returned 2xx;
 //   GitHub redelivers only on non-2xx)
 
-const BODY_CAP = 3000;
 const WATCHED_ACTIONS = new Set(["opened", "reopened"]);
+
+function clamp(value: unknown, cap: number): string {
+  return typeof value === "string" ? value.slice(0, cap) : "";
+}
 
 export interface WebhookIssueInput {
   issueNumber: number;
@@ -102,19 +112,17 @@ export function classifyWebhookEvent(
               : null,
         )
         .filter((v): v is string => v !== null && v.length > 0)
+        .map((v) => v.slice(0, LABEL_CAP))
     : [];
-  const body =
-    typeof issue.body === "string" ? issue.body.slice(0, BODY_CAP) : "";
   return {
     action: "process",
     input: {
       issueNumber: issue.number,
-      title: typeof issue.title === "string" ? issue.title : "",
-      body,
+      title: clamp(issue.title, TITLE_CAP),
+      body: clamp(issue.body, BODY_CAP),
       labels,
-      repository: fullName,
-      repositoryDescription:
-        typeof repo?.description === "string" ? repo.description : "",
+      repository: fullName.slice(0, REPOSITORY_CAP),
+      repositoryDescription: clamp(repo?.description, DESCRIPTION_CAP),
     },
   };
 }
@@ -152,16 +160,15 @@ export async function handleIssueWebhook(
     payload,
   });
   if (decision.action === "skip") return { status: 204 };
+  const input = decision.input;
 
   const meta = {
-    repository: decision.input.repository,
-    issueNumber: decision.input.issueNumber,
+    repository: input.repository,
+    issueNumber: input.issueNumber,
   };
   const background = (async () => {
     try {
-      await deps.onProcess(
-        decision.action === "process" ? decision.input : (undefined as never),
-      );
+      await deps.onProcess(input);
     } catch (error) {
       deps.onError?.(
         error instanceof Error ? error : new Error(String(error)),
@@ -178,6 +185,12 @@ export interface RouteHandlerConfig {
   allowedRepos?: readonly string[];
   onProcess(input: WebhookIssueInput): Promise<unknown>;
   onError?(error: Error, meta: Record<string, unknown>): void;
+  /**
+   * Eager readiness probe (e.g. resolveLiveClassifierEnv). Throwing converts
+   * the delivery into a 503 so GitHub redelivers once configuration exists,
+   * instead of accepting work that can only fail silently in the background.
+   */
+  verifyReady?(): void;
 }
 
 interface WaitUntilArgs {
@@ -194,6 +207,15 @@ export function createRouteHandler(config: RouteHandlerConfig) {
     if (req.method !== "POST") return new Response(null, { status: 405 });
     if (!config.secret) {
       return new Response("webhook secret not configured", { status: 500 });
+    }
+    if (config.verifyReady) {
+      try {
+        config.verifyReady();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "classifier not ready";
+        return new Response(message, { status: 503 });
+      }
     }
     const rawBody = await req.text();
     const ack = await handleIssueWebhook({

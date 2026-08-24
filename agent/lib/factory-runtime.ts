@@ -1,4 +1,4 @@
-﻿import { PGlite } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import postgres from "postgres";
 import { createNeonDatabase } from "@/factory/neon.ts";
 import { pgliteDatabase } from "@/factory/pglite.ts";
