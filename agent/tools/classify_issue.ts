@@ -12,6 +12,10 @@ import { ClassificationInput } from "../../factory/classifier-schema.ts";
 // triple wrapped in an audit record. Model credentials stay in the host
 // runtime (OPENCODE_GO_API_KEY); the adapter is built lazily on first use so
 // `eve dev` still boots without one configured.
+//
+// Default model ox-alpha-free rides the free pool: expect occasional 429/503
+// saturation spikes; the classifier's attempt/backoff loop absorbs them. Set
+// CLASSIFIER_MODEL to escape-hatch onto a paid model without code changes.
 
 let liveGeneratePromise: Promise<ClassifyIssueDeps["generate"]> | undefined;
 
@@ -22,7 +26,7 @@ function getLiveDeps(): ClassifyIssueDeps {
       "classify_issue requires OPENCODE_GO_API_KEY in the host runtime",
     );
   }
-  const model = process.env.CLASSIFIER_MODEL ?? "deepseek-v4-flash";
+  const model = process.env.CLASSIFIER_MODEL ?? "ox-alpha-free";
   if (!liveGeneratePromise) {
     // OpenCode Go is the production inference path; temperature defaults to 0
     // per the #33 resolution's low-temperature directive.
