@@ -5,7 +5,7 @@ import sandbox from "../agent/sandbox/sandbox.ts";
 
 describe("agent configuration", () => {
   it("uses the pinned OpenCode Go model", () => {
-    expect(agent.model.modelId).toBe("deepseek-v4-flash");
+    expect(agent.model.modelId).toBe("ox-alpha-free");
     expect(agent.modelContextWindowTokens).toBe(128_000);
 
     const modelConfig = (

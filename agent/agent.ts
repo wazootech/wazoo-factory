@@ -8,6 +8,6 @@ const opencodeGo = createOpenAICompatible({
 });
 
 export default defineAgent({
-  model: opencodeGo("deepseek-v4-flash"),
+  model: opencodeGo("ox-alpha-free"),
   modelContextWindowTokens: 128_000,
 });
