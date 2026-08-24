@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { serviceTokenAuth } from "../agent/lib/service-token.ts";
+﻿import { describe, expect, it } from "vitest";
+import { serviceTokenAuth } from "@/agent/lib/service-token.ts";
 
 function requestWith(token: string | null): Request {
   return new Request("http://localhost/eve/v1/session", {

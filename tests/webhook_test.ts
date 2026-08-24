@@ -5,7 +5,7 @@ import {
   createRouteHandler,
   handleIssueWebhook,
   verifyGitHubSignature,
-} from "../factory/webhook.ts";
+} from "@/factory/webhook.ts";
 
 const SECRET = "whsec_test_123";
 

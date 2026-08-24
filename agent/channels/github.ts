@@ -5,11 +5,11 @@ import {
   classifyIssue,
   resolveLiveClassifierEnv,
   type ClassifyIssueDeps,
-} from "../../factory/classifier.ts";
+} from "@/factory/classifier.ts";
 import {
   createRouteHandler,
   type WebhookIssueInput,
-} from "../../factory/webhook.ts";
+} from "@/factory/webhook.ts";
 
 // GitHub webhook channel (#35): issues.opened / issues.reopened deliveries are
 // HMAC-verified (GITHUB_WEBHOOK_SECRET), filtered, answered 202 immediately,

@@ -1,8 +1,8 @@
-import { defineTool } from "eve/tools";
+﻿import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
-import { Plan } from "../../factory/contracts.ts";
-import { factoryWorkflow } from "../lib/factory-runtime.ts";
+import { Plan } from "@/factory/contracts.ts";
+import { factoryWorkflow } from "@/agent/lib/factory-runtime.ts";
 
 export default defineTool({
   description:

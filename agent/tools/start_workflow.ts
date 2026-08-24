@@ -1,7 +1,10 @@
-import { defineTool } from "eve/tools";
+﻿import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { ChangeRequest } from "../../factory/contracts.ts";
-import { factoryWorkflow, sessionPrincipal } from "../lib/factory-runtime.ts";
+import { ChangeRequest } from "@/factory/contracts.ts";
+import {
+  factoryWorkflow,
+  sessionPrincipal,
+} from "@/agent/lib/factory-runtime.ts";
 
 const inputSchema = ChangeRequest.omit({ requester: true }).extend({
   requester: z.string().min(1).optional(),

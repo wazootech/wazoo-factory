@@ -1,23 +1,23 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+﻿import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import {
   Classification,
   ClassificationInput,
   ClassificationResult,
   IssueCategory,
-} from "../factory/classifier-schema.ts";
+} from "@/factory/classifier-schema.ts";
 import {
   buildClassifierSystemPrompt,
   buildClassifierUserPrompt,
-} from "../factory/classifier-prompt.ts";
+} from "@/factory/classifier-prompt.ts";
 import {
   classifyIssue,
   createClassifyIssueTool,
   DEFAULT_BACKOFF_MS,
   type ClassifyIssueDeps,
-} from "../factory/classifier.ts";
-import type { Classification as ClassificationValue } from "../factory/classifier-schema.ts";
-import classifyIssueTool from "../agent/tools/classify_issue.ts";
+} from "@/factory/classifier.ts";
+import type { Classification as ClassificationValue } from "@/factory/classifier-schema.ts";
+import classifyIssueTool from "@/agent/tools/classify_issue.ts";
 
 const validClassification = {
   category: "bug",

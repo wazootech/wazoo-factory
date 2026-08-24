@@ -1,19 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { HmacApprovalSigner, newApproval } from "../factory/authorization.ts";
+﻿import { describe, expect, it } from "vitest";
+import { HmacApprovalSigner, newApproval } from "@/factory/authorization.ts";
 import type {
   GitHubAdapter,
   ReviewAdapter,
   SandboxAdapter,
   VerificationAdapter,
   WorkspaceAdapter,
-} from "../factory/adapters.ts";
+} from "@/factory/adapters.ts";
 import {
   digestArtifact,
   type ChangeRequest,
   type Plan,
-} from "../factory/contracts.ts";
-import { MemoryWorkflowStore } from "../factory/storage.ts";
-import { FactoryWorkflow } from "../factory/workflow.ts";
+} from "@/factory/contracts.ts";
+import { MemoryWorkflowStore } from "@/factory/storage.ts";
+import { FactoryWorkflow } from "@/factory/workflow.ts";
 
 const request: ChangeRequest = {
   id: "workflow-e2e",
