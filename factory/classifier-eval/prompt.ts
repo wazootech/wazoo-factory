@@ -25,15 +25,26 @@ export interface ClassificationPromptInput {
   repository: string;
   title: string;
   body: string;
+  /** Optional issue labels, rendered as passive context. */
+  labels?: readonly string[];
+  /** Optional repository description, rendered above the repository line. */
+  repositoryDescription?: string;
 }
 
 export function buildUserPrompt(input: ClassificationPromptInput): string {
   const body = input.body.trim().length > 0 ? input.body : "(no body provided)";
-  return [
-    `Repository: ${input.repository}`,
-    `Issue title: ${input.title}`,
-    "",
-    "Issue body:",
-    body,
-  ].join("\n");
+  const lines: string[] = [];
+  const description = input.repositoryDescription?.trim();
+  if (description) {
+    lines.push(`Repository description: ${description}`);
+  }
+  lines.push(`Repository: ${input.repository}`);
+  lines.push(`Issue title: ${input.title}`);
+  if (input.labels && input.labels.length > 0) {
+    lines.push(`Existing labels: ${input.labels.join(", ")}`);
+  }
+  lines.push("");
+  lines.push("Issue body:");
+  lines.push(body);
+  return lines.join("\n");
 }
