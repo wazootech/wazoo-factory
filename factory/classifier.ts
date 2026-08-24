@@ -101,6 +101,36 @@ export interface LiveClassifierOptions {
   maxRetries?: number;
 }
 
+export const CLASSIFIER_DEFAULT_BASE_URL = "https://opencode.ai/zen/go/v1";
+export const CLASSIFIER_DEFAULT_MODEL = "ox-alpha-free";
+
+export interface ResolvedLiveClassifier {
+  apiKey: string;
+  model: string;
+  baseURL: string;
+}
+
+/** Single env-resolution point shared by the Eve tool and the webhook channel. */
+export function resolveLiveClassifierEnv(
+  env: {
+    OPENCODE_GO_API_KEY?: string;
+    CLASSIFIER_MODEL?: string;
+    CLASSIFIER_BASE_URL?: string;
+  } = process.env,
+): ResolvedLiveClassifier {
+  const apiKey = env.OPENCODE_GO_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "classifier requires OPENCODE_GO_API_KEY in the host runtime",
+    );
+  }
+  return {
+    apiKey,
+    model: env.CLASSIFIER_MODEL ?? CLASSIFIER_DEFAULT_MODEL,
+    baseURL: env.CLASSIFIER_BASE_URL ?? CLASSIFIER_DEFAULT_BASE_URL,
+  };
+}
+
 // Live adapter over an OpenAI-compatible gateway using generateText +
 // Output.object() per #33. The JSON-extraction middleware strips markdown
 // fences that small models wrap around otherwise-valid JSON. Requires
