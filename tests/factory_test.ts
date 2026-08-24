@@ -3,15 +3,15 @@ import {
   assertApproval,
   HmacApprovalSigner,
   newApproval,
-} from "../factory/authorization.ts";
+} from "@/factory/authorization.ts";
 import {
   canTransition,
   createWorkflow,
   redactTrace,
   type ChangeRequest,
-} from "../factory/contracts.ts";
-import { MemoryWorkflowStore } from "../factory/storage.ts";
-import { principalFromAuth } from "../agent/lib/factory-runtime.ts";
+} from "@/factory/contracts.ts";
+import { MemoryWorkflowStore } from "@/factory/storage.ts";
+import { principalFromAuth } from "@/agent/lib/factory-runtime.ts";
 
 const request: ChangeRequest = {
   id: "workflow-1",

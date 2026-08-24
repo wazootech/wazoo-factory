@@ -6,13 +6,13 @@ import {
   Classification,
   IssueCategory,
   countSentences,
-} from "../factory/classifier-eval/schema.ts";
-import { scorePredictions } from "../factory/classifier-eval/score.ts";
-import { buildSystemPrompt } from "../factory/classifier-eval/prompt.ts";
-import { renderReport } from "../factory/classifier-eval/report.ts";
-import { mapIssueToCase } from "../factory/classifier-eval/pull.ts";
-import { createSchemaValidatedClassifier } from "../factory/classifier-eval/classify.ts";
-import type { Classification as ClassificationValue } from "../factory/classifier-eval/schema.ts";
+} from "@/factory/classifier-eval/schema.ts";
+import { scorePredictions } from "@/factory/classifier-eval/score.ts";
+import { buildSystemPrompt } from "@/factory/classifier-eval/prompt.ts";
+import { renderReport } from "@/factory/classifier-eval/report.ts";
+import { mapIssueToCase } from "@/factory/classifier-eval/pull.ts";
+import { createSchemaValidatedClassifier } from "@/factory/classifier-eval/classify.ts";
+import type { Classification as ClassificationValue } from "@/factory/classifier-eval/schema.ts";
 
 const validClassification: ClassificationValue = {
   category: "bug",

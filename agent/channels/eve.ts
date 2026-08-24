@@ -1,6 +1,6 @@
 import { eveChannel } from "eve/channels/eve";
 import { localDev } from "eve/channels/auth";
-import { serviceTokenAuth } from "../lib/service-token.ts";
+import { serviceTokenAuth } from "@/agent/lib/service-token.ts";
 
 /**
  * Production routes authenticate with a shared service token

@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { factoryWorkflow } from "../lib/factory-runtime.ts";
+import { factoryWorkflow } from "@/agent/lib/factory-runtime.ts";
 
 export default defineTool({
   description:

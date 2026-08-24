@@ -7,15 +7,15 @@ import {
   HmacApprovalSigner,
   newApproval,
   type AuthenticatedPrincipal,
-} from "../factory/authorization.ts";
-import { createWorkflow, type AuditEvent } from "../factory/contracts.ts";
-import { pgliteDatabase } from "../factory/pglite.ts";
-import { PostgresWorkflowStore } from "../factory/postgres-storage.ts";
+} from "@/factory/authorization.ts";
+import { createWorkflow, type AuditEvent } from "@/factory/contracts.ts";
+import { pgliteDatabase } from "@/factory/pglite.ts";
+import { PostgresWorkflowStore } from "@/factory/postgres-storage.ts";
 import {
   JsonWorkflowStore,
   MemoryWorkflowStore,
   type WorkflowStore,
-} from "../factory/storage.ts";
+} from "@/factory/storage.ts";
 
 const request = {
   id: "workflow-1",

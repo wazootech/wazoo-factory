@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .eve/
+.output/
 .env
 .env.*
 !.env.example
