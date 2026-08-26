@@ -52,18 +52,18 @@ export interface ClassificationPromptInput {
   body: string;
   /** Optional issue labels, rendered as passive context. */
   labels?: readonly string[];
-  /** Optional repository description, rendered above the repository line. */
+  /** Optional repository description - deliberately unrendered (#36 anti-anchoring). */
   repositoryDescription?: string;
 }
 
 export function buildUserPrompt(input: ClassificationPromptInput): string {
   const body = input.body.trim().length > 0 ? input.body : "(no body provided)";
   const lines: string[] = [];
-  // The repository name is deliberately not rendered: the rescore showed the
-  // model anchoring on repo-name nouns (e.g. predicting "docs" for a CI
-  // failure alert because the repo was docs.wazoo.dev). Title and body carry
-  // the classification signal; the field stays in the interface so callers
-  // keep a stable shape.
+  // The repository name and description are deliberately not rendered: the
+  // rescore showed the model anchoring on repo-name nouns (e.g. predicting
+  // "docs" for a CI-failure alert because the repo was docs.wazoo.dev). Title
+  // and body carry the classification signal; the fields stay in the interface
+  // so callers keep a stable shape.
   lines.push(`Issue title: ${input.title}`);
   if (input.labels && input.labels.length > 0) {
     lines.push(`Existing labels: ${input.labels.join(", ")}`);
