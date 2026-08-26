@@ -133,14 +133,15 @@ describe("classifier prompt", () => {
     }
   });
 
-  it("renders repository description when provided", () => {
+  it("does not render repository-anchoring context (anti-anchoring #36)", () => {
     const prompt = buildClassifierUserPrompt({
       ...baseInput,
       repositoryDescription: "Persistent memory SDK for agents.",
     });
-    expect(prompt).toContain(
+    expect(prompt).not.toContain(
       "Repository description: Persistent memory SDK for agents.",
     );
+    expect(prompt).not.toContain("Repository:");
   });
 
   it("renders existing labels when provided", () => {
@@ -231,7 +232,8 @@ describe("classifyIssue", () => {
     const call = generate.mock.calls[0]![0];
     expect(call.system).toContain("Forced choice");
     expect(call.prompt).toContain("Existing labels: crash");
-    expect(call.prompt).toContain("Repository description: Memory SDK");
+    expect(call.prompt).not.toContain("Repository description:");
+    expect(call.prompt).not.toContain("Repository:");
   });
 
   it("rejects invalid input before calling the model", async () => {
