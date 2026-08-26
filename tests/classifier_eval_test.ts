@@ -8,7 +8,10 @@ import {
   countSentences,
 } from "@/factory/classifier-eval/schema.ts";
 import { scorePredictions } from "@/factory/classifier-eval/score.ts";
-import { buildSystemPrompt } from "@/factory/classifier-eval/prompt.ts";
+import {
+  buildSystemPrompt,
+  buildUserPrompt,
+} from "@/factory/classifier-eval/prompt.ts";
 import { renderReport } from "@/factory/classifier-eval/report.ts";
 import { mapIssueToCase } from "@/factory/classifier-eval/pull.ts";
 import { createSchemaValidatedClassifier } from "@/factory/classifier-eval/classify.ts";
@@ -193,6 +196,63 @@ describe("buildSystemPrompt", () => {
     }
     expect(prompt).toContain("confidence");
     expect(prompt.toLowerCase()).not.toContain("legacy");
+  });
+
+  it("states the written-material primacy rule (#36 rescore target)", () => {
+    const prompt = buildSystemPrompt();
+    // Two-question decision procedure: artifact-kind first, broken-vs-new second.
+    expect(prompt.toLowerCase()).toContain("written material");
+    expect(prompt.toLowerCase()).toContain("dominant deliverable");
+    // Verification/survey tickets resolve to a written finding -> docs.
+    expect(prompt.toLowerCase()).toContain("verify");
+  });
+
+  it("classifies routine maintenance as feature (#36 rescore target)", () => {
+    const prompt = buildSystemPrompt().toLowerCase();
+    expect(prompt).toContain("maintenance");
+    expect(prompt).toContain("dependency");
+  });
+
+  it("forbids anchoring on repository names or title nouns", () => {
+    const prompt = buildSystemPrompt().toLowerCase();
+    expect(prompt).toContain("repository name");
+    expect(prompt).toContain("classify by the change the ticket demands");
+  });
+});
+
+describe("buildUserPrompt", () => {
+  it("never renders the repository name (anti-anchoring context experiment)", () => {
+    const rendered = buildUserPrompt({
+      repository: "wazootech/docs.wazoo.dev",
+      title: "Drift detected on flip-maturity-ladder",
+      body: "The drift detection workflow failed.",
+    });
+    expect(rendered).not.toContain("wazootech/docs.wazoo.dev");
+    expect(rendered).not.toContain("Repository:");
+    expect(rendered).toContain(
+      "Issue title: Drift detected on flip-maturity-ladder",
+    );
+    expect(rendered).toContain("The drift detection workflow failed.");
+  });
+
+  it("still renders optional labels when supplied", () => {
+    const rendered = buildUserPrompt({
+      repository: "wazootech/example",
+      title: "t",
+      body: "b",
+      labels: ["bug"],
+    });
+    expect(rendered).toContain("Existing labels: bug");
+    expect(rendered).not.toContain("wazootech/example");
+  });
+
+  it("substitutes a placeholder for an empty body", () => {
+    const rendered = buildUserPrompt({
+      repository: "wazootech/example",
+      title: "t",
+      body: "",
+    });
+    expect(rendered).toContain("(no body provided)");
   });
 });
 
