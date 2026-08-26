@@ -4,14 +4,14 @@ import agent from "@/agent/agent.ts";
 import sandbox from "@/agent/sandbox/sandbox.ts";
 
 describe("agent configuration", () => {
-  it("uses the pinned OpenCode Go model", () => {
-    expect(agent.model.modelId).toBe("ox-alpha-free");
+  it("uses the pinned Vercel AI Gateway model", () => {
+    expect(agent.model.modelId).toBe("openai/gpt-4.1-nano");
     expect(agent.modelContextWindowTokens).toBe(128_000);
 
     const modelConfig = (
       agent.model as unknown as { config: { provider: string } }
     ).config;
-    expect(modelConfig.provider).toBe("opencode-go.chat");
+    expect(modelConfig.provider).toBe("vercel-ai-gateway.chat");
   });
 
   it("uses the Vercel sandbox backend", () => {

@@ -101,8 +101,8 @@ export interface LiveClassifierOptions {
   maxRetries?: number;
 }
 
-export const CLASSIFIER_DEFAULT_BASE_URL = "https://opencode.ai/zen/go/v1";
-export const CLASSIFIER_DEFAULT_MODEL = "ox-alpha-free";
+export const CLASSIFIER_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
+export const CLASSIFIER_DEFAULT_MODEL = "openai/gpt-4.1-nano";
 
 export interface ResolvedLiveClassifier {
   apiKey: string;
@@ -113,15 +113,16 @@ export interface ResolvedLiveClassifier {
 /** Single env-resolution point shared by the Eve tool and the webhook channel. */
 export function resolveLiveClassifierEnv(
   env: {
+    AI_GATEWAY_API_KEY?: string;
     OPENCODE_GO_API_KEY?: string;
     CLASSIFIER_MODEL?: string;
     CLASSIFIER_BASE_URL?: string;
   } = process.env,
 ): ResolvedLiveClassifier {
-  const apiKey = env.OPENCODE_GO_API_KEY;
+  const apiKey = env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "classifier requires OPENCODE_GO_API_KEY in the host runtime",
+      "classifier requires AI_GATEWAY_API_KEY in the host runtime",
     );
   }
   return {
