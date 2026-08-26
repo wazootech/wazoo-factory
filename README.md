@@ -77,9 +77,9 @@ pnpm build
 
 Requires Node.js 24+.
 
-The Eve agent uses OpenCode Go directly for inference and Vercel Sandbox for
+The Eve agent uses Vercel AI Gateway for inference and Vercel Sandbox for
 isolated execution. Link the repository to a Vercel project and set
-`OPENCODE_GO_API_KEY` before running `pnpm dev`; local development creates the
+`AI_GATEWAY_API_KEY` before running `pnpm dev`; local development creates the
 same hosted sandbox backend used in production. Sandbox egress is restricted to
 GitHub and npm registries for repository and dependency operations. Keep the
 key in the app runtime environment and never pass it to the sandbox.

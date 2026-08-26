@@ -13,16 +13,17 @@ import { renderReport } from "@/factory/classifier-eval/report.ts";
 import type { Classification } from "@/factory/classifier-eval/schema.ts";
 
 // Live eval per the #39 resolution. Gated on credentials so CI never calls a
-// model; run manually with any OpenAI-compatible gateway:
-//   CLASSIFIER_EVAL_BASE_URL=... CLASSIFIER_EVAL_API_KEY=... \
-//   [CLASSIFIER_EVAL_MODEL=x-preview-f-free] \
+// model; run manually with any OpenAI-compatible gateway (e.g. Vercel AI Gateway):
+//   CLASSIFIER_EVAL_BASE_URL=https://ai-gateway.vercel.sh/v1 \
+//   CLASSIFIER_EVAL_API_KEY=<vercel-ai-gateway-key> \
+//   [CLASSIFIER_EVAL_MODEL=minimax/minimax-m3] \
 //   pnpm vitest run tests/classifier_eval_live_test.ts
 //
-// CLASSIFIER_EVAL_MODEL is the gateway wire id (no "opencode/" app-config
-// prefix): createLiveGenerate passes it verbatim to the provider.
+// CLASSIFIER_EVAL_MODEL is the gateway wire id: createLiveGenerate passes it
+// verbatim to the provider. Vercel uses provider/model format.
 const baseUrl = process.env.CLASSIFIER_EVAL_BASE_URL;
 const apiKey = process.env.CLASSIFIER_EVAL_API_KEY;
-const modelId = process.env.CLASSIFIER_EVAL_MODEL ?? "x-preview-f-free";
+const modelId = process.env.CLASSIFIER_EVAL_MODEL ?? "minimax/minimax-m3";
 const liveEnabled = Boolean(baseUrl && apiKey);
 
 interface PredictionRecord {
@@ -56,11 +57,8 @@ describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
       const predictions: PredictionRecord[] = [];
       const failures: string[] = [];
 
-      // Free-tier gateways are slow (x-preview-f-free measured ~80s per
-      // classifier-sized completion) so the run overlaps a small bounded
-      // number of requests instead of walking cases sequentially, and each
-      // case retries with backoff because the shared free endpoint answers
-      // 503 "Endpoint is unavailable" under load.
+      // Free-tier gateways may be slow; the classifier's attempt/backoff loop
+      // absorbs transient 429/503 errors.
       const concurrency = Math.max(
         1,
         Number(process.env.CLASSIFIER_EVAL_CONCURRENCY ?? 4),

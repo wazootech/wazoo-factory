@@ -11,9 +11,10 @@ import { ClassificationInput } from "../../factory/classifier-schema.ts";
 // runtime; the adapter is built lazily on first use so `eve dev` still boots
 // without one configured.
 //
-// Default model ox-alpha-free rides the free pool: expect occasional 429/503
-// saturation spikes; the classifier's attempt/backoff loop absorbs them. Set
-// CLASSIFIER_MODEL to escape-hatch onto a paid model without code changes.
+// Default model openai/gpt-4.1-nano via Vercel AI Gateway: expect occasional
+// 429/503 saturation spikes on the free tier; the classifier's attempt/backoff
+// loop absorbs them. Set CLASSIFIER_MODEL to escape-hatch onto a different
+// model without code changes.
 
 const liveDeps = createLazyLiveDeps();
 
