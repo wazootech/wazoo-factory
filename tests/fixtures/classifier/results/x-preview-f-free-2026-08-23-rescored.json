@@ -1,0 +1,93 @@
+{
+  "sourceBaseline": "C:\\Users\\ethan\\Documents\\wazootech\\workspace\\worktrees\\wazoo-factory\\truth-classifier-fixtures\\tests\\fixtures\\classifier\\results\\x-preview-f-free-2026-08-23.json",
+  "goldSource": "human-ratified-agent-proposal-2026-08-25",
+  "rescoredAt": "2026-08-26T04:11:24.172Z",
+  "gateSummary": {
+    "gate": 0.8,
+    "total": 40,
+    "atOrAbove": 26,
+    "below": 14
+  },
+  "summary": {
+    "total": 40,
+    "correct": 33,
+    "accuracy": 0.825,
+    "autoLabelGate": 0.8,
+    "misclassifiedAboveGate": 4
+  },
+  "confusion": {
+    "bug": {
+      "bug": 4,
+      "feature": 0,
+      "docs": 1
+    },
+    "feature": {
+      "bug": 0,
+      "feature": 22,
+      "docs": 0
+    },
+    "docs": {
+      "bug": 0,
+      "feature": 6,
+      "docs": 7
+    }
+  },
+  "misclassified": [
+    {
+      "id": "workspace-106",
+      "gold": "docs",
+      "predicted": "feature",
+      "confidence": 0.6,
+      "correct": false,
+      "wouldAutoLabel": false
+    },
+    {
+      "id": "wiki-251",
+      "gold": "docs",
+      "predicted": "feature",
+      "confidence": 0.85,
+      "correct": false,
+      "wouldAutoLabel": true
+    },
+    {
+      "id": "wiki-templates-39",
+      "gold": "docs",
+      "predicted": "feature",
+      "confidence": 0.95,
+      "correct": false,
+      "wouldAutoLabel": true
+    },
+    {
+      "id": "docs.wazoo.dev-131",
+      "gold": "bug",
+      "predicted": "docs",
+      "confidence": 0.85,
+      "correct": false,
+      "wouldAutoLabel": true
+    },
+    {
+      "id": "linked-markdown-10",
+      "gold": "docs",
+      "predicted": "feature",
+      "confidence": 0.72,
+      "correct": false,
+      "wouldAutoLabel": false
+    },
+    {
+      "id": "wiki-249",
+      "gold": "docs",
+      "predicted": "feature",
+      "confidence": 0.88,
+      "correct": false,
+      "wouldAutoLabel": true
+    },
+    {
+      "id": "worlds-api-34",
+      "gold": "docs",
+      "predicted": "feature",
+      "confidence": 0.62,
+      "correct": false,
+      "wouldAutoLabel": false
+    }
+  ]
+}
