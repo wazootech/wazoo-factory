@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-08-23T17:45:39.656Z",
-  "goldSource": "legacy-hints-provisional",
+  "goldSource": "human-ratified-agent-proposal-2026-08-25",
   "cases": [
     {
       "id": "workspace-106",
@@ -9,7 +9,8 @@
       "title": "Survey installed-skill collision surface",
       "body": "## Question\n\nWhat actually collides in the flat installed-skills namespace once the first `wazootech_` prefix lands?\n\nSurvey the three global install roots on a working device — `~/.agents/skills/`, `~/.claude/skills/`, `~/.config/opencode/skills/` — and report:\n\n1. Full inventory of flat skill directory names per root (count + names).\n2. Any existing or near-colliding names against: planned harness names (`wazootech_pick-issue`) and bare packaged names (`wiki`, `wspace`, `worlds-sdk-ts-onboarding`, `engineering/wazoo` install surface).\n3. Whether the skills installer preserves origin post-install anywhere (frontmatter? metadata file?) or flattens to bare directory names.\n4. One-line risk verdict for the rollout notes: safe to land prefixed harness skills now, or wait?\n\nFindings feed: the prefix ticket's rollout note, the law's residual-risk statement, and possibly a migration-notes fog graduation.\n\n**Part of** #95. AFK — resolve via research subagent; findings posted as the resolution comment.\n",
       "url": "https://github.com/wazootech/workspace/issues/106",
-      "legacyLabels": ["wayfinder:research"]
+      "legacyLabels": ["wayfinder:research"],
+      "gold": "docs"
     },
     {
       "id": "docs.wazoo.dev-132",
@@ -38,7 +39,8 @@
       "title": "Publish linked-markdown-py to PyPI",
       "body": "## Goal\n\nPublish \\linked-markdown-py\\ to PyPI so the Python reference implementation is installable via \\pip install linked-markdown-py\\.\n\n## Pre-flight checklist\n\n- [ ] \\uv sync && uv run pytest\\ passes (40 tests)\n- [ ] \\uv build\\ produces a valid wheel\n- [ ] \\uvx twine check dist/*\\ passes\n\n## Configure trusted publishing (one-time)\n\n1. Go to https://pypi.org/manage/account/publishing/\n2. Add a new trusted publisher:\n   - PyPI project: \\linked-markdown-py\\\n   - Repository owner: \\wazootech\\\n   - Repository name: \\linked-markdown-py\\\n   - Workflow name: \\\release.yml\\\n   - Environment: (leave blank)\n\n## Publish\n\n\\\\\\\bash\ngit tag v0.1.0\ngit push origin v0.1.0\n\\\\\\\n\nThe Release workflow will build and publish automatically.\n\n## Post-publish verification\n\n- \\pip install linked-markdown-py\\ works\n- \\uv add linked-markdown-py\\ works (to switch wiki-cli from git source)\n- README badge updated to [![PyPI](https://img.shields.io/pypi/v/linked-markdown-py)](https://pypi.org/project/linked-markdown-py/)\n\n## Related\n\n- wazootech/linked-markdown-ts#1 — sister TypeScript package publish",
       "url": "https://github.com/wazootech/linked-markdown-py/issues/2",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "linked-markdown-ts-2",
@@ -47,7 +49,8 @@
       "title": "Publish @wazoo/linked-markdown to JSR",
       "body": "## Goal\n\nPublish \\@wazoo/linked-markdown\\ to JSR so the TypeScript reference implementation is installable.\n\n## Pre-flight checklist\n\n- [ ] \\deno check src/mod.ts\\ passes\n- [ ] \\deno task test\\ passes (54 tests: 14 unit + 40 conformance)\n- [ ] \\deno publish --dry-run\\ shows no errors\n- [ ] Confirm \\@wazoo\\ scope membership on JSR (scope already exists with 4 packages)\n\n## Publish (manual)\n\n\\\\\\\bash\ndeno login          # authenticate with JSR (opens browser)\ndeno publish        # publish v0.1.0\n\\\\\\\n\n## CI workflow\n\nAdd a \\.github/workflows/release.yml\\ that runs \\deno publish\\ on \\\u000b*\\ tags, so future releases are automatic.\n\n## Post-publish verification\n\n- \\deno add jsr:@wazoo/linked-markdown\\ works in a fresh project\n- \\\npm i jsr:@wazoo/linked-markdown\\ works for npm consumers\n- README badge updated to [![JSR](https://jsr.io/badges/@wazoo/linked-markdown)](https://jsr.io/@wazoo/linked-markdown)\n\n## Related\n\n- wazootech/linked-markdown-py#1 — sister Python package publish",
       "url": "https://github.com/wazootech/linked-markdown-ts/issues/2",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "memsdk-6",
@@ -66,7 +69,8 @@
       "title": "Wire worldsAdminClient into users.ts account-deletion route",
       "body": "## Context\n\nPR [#37](https://github.com/wazootech/wazoo-api/pull/37) added `@/lib/worlds-client.ts` with a `worldsAdminClient` helper and `worldsApiErrorDetail` extractor. The account-deletion route in `src/routes/users.ts` still uses raw fetch calls and should be migrated to the generated client.\n\n## Review comment\n\n[r3818212434](https://github.com/wazootech/wazoo-api/pull/37/changes#r3818212434) on `src/routes/users.ts:11` suggests:\n\n```typescript\nimport { db, id, now } from \"@/lib/db\";\nimport { isAdmin, requireScope, respond } from \"@/lib/http\";\nimport { UserSchema } from \"../lib/schemas\";\nimport { deleteNamespaceWorlds } from \"@worlds/client\";\nimport { worldsAdminClient } from \"@/lib/worlds-client\";\n```\n\n## Scope\n\nReplace the hand-rolled `fetch` calls in the account-deletion handler with `worldsAdminClient(env).worlds.deleteNamespace(...)` (or the equivalent `deleteNamespaceWorlds` call), using `worldsApiErrorDetail` for error extraction. Also align the import style with the `@/` path alias convention per [workspace#24](https://github.com/wazootech/workspace/issues/24).\n\n## Blocked on\n\nPR [#37](https://github.com/wazootech/wazoo-api/pull/37) merge (provides the `worldsAdminClient` helper).",
       "url": "https://github.com/wazootech/wazoo-api/issues/38",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "feature"
     },
     {
       "id": "wazoo-client-ts-1",
@@ -75,7 +79,8 @@
       "title": "chore: migrate @wazoo/client toolchain from Node/tsx to Deno (align with @worlds/client)",
       "body": "## Summary / Proposal\n\nMigrate `@wazoo/client`'s development toolchain from Node.js (`npm` + `tsx` + `tsc`) to **Deno**, mirroring its sibling `@worlds/client` (`worlds-client-ts`), which is already fully Deno-native.\n\nThis repo is a half-Deno repo today: it already publishes to JSR (`jsr.json` exists; both CI workflows run `npx jsr publish`), but the development path is still Node — including a `tsx` call site that only exists to let a script `import()` a `.ts` OpenAPI spec.\n\n## Current State\n\n- `package.json:24` — `\"sync:openapi\": \"tsx scripts/sync-openapi.mjs\"` (tsx loads `../wazoo-api/src/openapi/spec.ts` — a TypeScript file — inside an otherwise-plain `.mjs` script)\n- `package.json` devDeps — `tsx`, `tsc`-driven `generate`/`build`/`check` scripts, `@hey-api/openapi-ts`\n- `jsr.json` already declares `exports: { \".\": \"./src/index.ts\" }` and publishes `src/**/*.ts` directly — **the JSR artifact is raw source, not `dist/`**\n- `.github/workflows/ci.yml` — `actions/setup-node@v4`, `npm ci`, `npm run check`, `npx jsr publish --dry-run`\n- `.github/workflows/publish.yml` — `npm ci`, `npm run check`, `npx jsr publish`\n- Consumers already install via `npx jsr add @wazoo/client` (README.md)\n- Sibling `worlds-client-ts` (`@worlds/client`) uses the canonical Deno layout: `deno.json` with `imports`, `deno task ci`, `deno publish`\n\n## Proposed Changes\n\n### Root: replace npm/tsx/tsc toolchain with Deno\n- [ ] Add `deno.json` with `name`/`exports` (aligning with existing `jsr.json`), `nodeModulesDir: \"auto\"`, `fmt`/`lint` config, and tasks:\n  - [ ] `task sync:openapi` — `deno -A scripts/sync-openapi.ts` (native TS import, no `tsx`)\n  - [ ] `task generate` — `deno run -A npm:@hey-api/openapi-ts` (or documented equivalent)\n  - [ ] `task check` — `deno check` / `deno fmt --check` / `deno lint`\n- [ ] Remove `tsx` and Node-only scripts from `package.json`; keep package metadata needed for npm/JSR interop if any\n- [ ] Port `scripts/sync-openapi.mjs` → `scripts/sync-openapi.ts` (drop the `.mjs` workaround)\n\n### CI\n- [ ] Replace `actions/setup-node@v4` with `denoland/setup-deno@v2` in `ci.yml` and `publish.yml`\n- [ ] Replace `npm ci && npm run check` with `deno task check` (fmt/lint/check)\n- [ ] Replace `npx jsr publish` with `deno publish`\n\n## Verification\n\n- [ ] `deno task sync:openapi` regenerates `openapi/openapi.json` from `../wazoo-api/src/openapi/spec.ts`\n- [ ] `deno task check` (fmt/lint/check) passes\n- [ ] `deno publish --dry-run` passes\n- [ ] Published JSR package import unchanged for consumers (`import { createClient } from \"@wazoo/client\"`)\n- [ ] CI green on push branch; worktree clean after handoff\n\n## Out of Scope\n\n- `@hey-api/openapi-ts` codegen output itself — no regeneration of `src/generated/` as part of this migration unless required to keep `check` green\n- `worlds-client-ts` — already Deno; referenced only as the pattern to follow\n- Data-plane client (`@worlds/client`) — separate package\n",
       "url": "https://github.com/wazootech/wazoo-client-ts/issues/1",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "wazoo-console-68",
@@ -94,7 +99,8 @@
       "title": "feat: implement @fartlabs/go shortlink system with design.md redirect",
       "body": "## Proposal\n\nImplement the deterministic static shortlink resolver build step for `wazoo.dev` using [`@fartlabs/go` (JSR)](https://jsr.io/@fartlabs/go), mirroring the setup in [`EthanThatOneKid/etok.me`](https://github.com/EthanThatOneKid/etok.me/blob/main/main.ts).\n\n### Primary Use Case\n\nAdd a shortlink configuration:\n```jsonc\n{\n  \"design.md\": \"/DESIGN.md\"\n}\n```\n\n### Why\n\nThis solves the GitHub Pages case-sensitivity routing issue for the `DESIGN.md` spec:\n- The build script will generate a physical directory `design.md/index.html` that redirects to the raw `/DESIGN.md` file.\n- This allows both casing options (`wazoo.dev/DESIGN.md` and `wazoo.dev/design.md`) to resolve successfully.\n- It also sets up a robust system for future go-links (e.g. `wazoo.dev/docs`, `wazoo.dev/git`, etc.) without needing a live backend router.\n",
       "url": "https://github.com/wazootech/wazoo.dev/issues/8",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "wazoopedia-11",
@@ -103,7 +109,8 @@
       "title": "Some files appear to contain corrupted frontmatter",
       "body": "Corrupted frontmatter. Either the frontmatter just isn't rendering properly or (more likely) the frontmatter is invalid for some reason. \n\nThe identified files with corrupted frontmatter should be formatted properly.\n\n### Example\n\nWhat it looks like on GitHub.\n\n<img width=\"746\" height=\"376\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/969a99f7-4181-4b6e-8dfb-cda37cfbe0eb\" />",
       "url": "https://github.com/wazootech/wazoopedia/issues/11",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "bug"
     },
     {
       "id": "wiki-251",
@@ -112,7 +119,8 @@
       "title": "Apply wiki-sync drift-free defaults to other repos' code wikis",
       "body": "Follow-up from [#249](https://github.com/wazootech/wiki/issues/249): \"Applying the new defaults to other repos' docs/ wikis once the skill language is updated.\"\n\nThe `wiki-sync` skill now defaults to the drift-free style (`detail_level: minimal` — no line numbers, machine-specific measurements, or test counts), with the detailed style opt-in via a `detail_level` directive in the wiki-owning repo's `AGENTS.md` (landed in [#250](https://github.com/wazootech/wiki/pull/250)). `wazootech/sparql-engine` declared `minimal` and migrated its wiki ([#140](https://github.com/wazootech/sparql-engine/pull/140), [#141](https://github.com/wazootech/sparql-engine/pull/141)).\n\nAs of 2026-08-16, `wazootech/sparql-engine` is the only repo with a `.sync-base` code wiki, so this issue tracks the rollout policy rather than an immediate migration:\n\n- [ ] Audit org repos for code wikis (`docs/` folders with `.sync-base` or `0X-*.md` page sets) that don't yet declare a `detail_level`.\n- [ ] For each found wiki, confirm it either (a) matches the drift-free default and declares `detail_level: minimal` in its `AGENTS.md`, or (b) deliberately opts into `line-numbers` / `measurements` / `full` and keeps its numbers execute-to-verify.\n- [ ] Document the rollout in `skills/wiki-sync/SKILL.md`'s \"Detail levels\" section if a second consumer emerges (the current text already covers per-repo opt-in).\n- [ ] Consider a shared CI guardrail (grep `docs/` for `L<digits>` citations and bare measurement units) for repos on the default style.",
       "url": "https://github.com/wazootech/wiki/issues/251",
-      "legacyLabels": ["documentation", "enhancement"]
+      "legacyLabels": ["documentation", "enhancement"],
+      "gold": "docs"
     },
     {
       "id": "wiki-templates-39",
@@ -121,7 +129,8 @@
       "title": "Add workspace-cli template for composing independently-owned sub-wikis",
       "body": "## Goal\n\nAdd `wazootech/wiki-templates/workspace-cli/`: a template showing how independently-owned sub-wiki repositories (\"thinking subwikis\") compose into one umbrella brain. Wiki CLI owns the semantic Markdown source layer and named-graph provenance; workspace-cli (`wspace`) owns repo lifecycle, git worktrees, and upstream contribution.\n\n## Why this matters\n\nWiki CLI already provides recursive source composition: `wiki.yml` + `wiki.lock`, `wiki install --recursive`, named graph URIs `{wiki}graphs/root` and `{wiki}graphs/source/{name}`, and a read-only union query view (`Recursive Semantic Datasets`).\n\nWhat is missing is the *multi-repo workspace* felt experience: an umbrella brain built from several independently-owned, independently-versioned sub-wiki repos where an agent can resolve ownership, edit the owning repo, and open a PR back upstream without flattening any boundary.\n\nworkspace-cli provides exactly that as a thin, git-native layer: `repos.json` manifest, `wspace check` baseline health, feature worktrees anchored to `origin/<default>`, conservative update policy, and secret sync. Together they make \"edit one unified brain, PR back to the owning sub-repo\" real while keeping graph boundaries, provenance, and source ownership explicit.\n\nRelated Wiki issues define the product framing this template demonstrates:\n\n- [wazootech/wiki#200](https://github.com/wazootech/wiki/issues/200) — recursive semantic dataset operations (product/workflow home)\n- [wazootech/wiki#156](https://github.com/wazootech/wiki/issues/156) — data source package registry around wiki.yml/wiki.lock\n- [wazootech/wiki#185](https://github.com/wazootech/wiki/issues/185) — meta: external source workflows, graph provenance, writable SPARQL\n- [wazootech/wiki#184](https://github.com/wazootech/wiki/issues/184) — writable SPARQL Update for wiki content\n- [wazootech/wiki#182](https://github.com/wazootech/wiki/issues/182) — document upstream contribution workflow for installed wiki sources\n- [wazootech/wiki#183](https://github.com/wazootech/wiki/issues/183) — expose query graph provenance and graph scoping controls\n\n## Boundary between Wiki CLI and the integration\n\n| Responsibility | Wiki CLI | workspace-cli (`wspace`) |\n|---|---|---|\n| Source of truth | Per-repo Markdown corpus + `wiki.yml` | `repos.json` workspace manifest |\n| Composition | `wiki install --recursive`, `wiki.lock`, named graphs | Clone layout under `repos/` |\n| Validation | fmt, lint, check, render, SHACL, JSON Schema | `wspace check` baseline health |\n| Contribution surface | `wiki edit` / SPARQL against owning graph | `wspace worktree add/remove`, PR push, env sync |\n| Provenance | `{wiki}graphs/root` + `{wiki}graphs/source/{name}` | Repository ownership of each sub-wiki |\n\nwspace is an optional orchestration layer. Wiki CLI never depends on it; the sub-wiki sources remain the canonical corpus, and derived indexes (or any future memory/runtime layer) stay downstream.\n\n## Recommended architecture\n\n```text\nsub-wiki ",
       "url": "https://github.com/wazootech/wiki-templates/issues/39",
-      "legacyLabels": ["template"]
+      "legacyLabels": ["template"],
+      "gold": "docs"
     },
     {
       "id": "worlds-api-46",
@@ -130,7 +139,8 @@
       "title": "Abort in-flight SPARQL queries on client disconnect (wire SparqlRequest.signal in /worlds/:id/sparql)",
       "body": "**Wire `SparqlRequest.signal` into `/worlds/{id}/sparql` so an in-flight SPARQL query is aborted when the client disconnects.**\n\n### Why\n\nThe route today races the query against a server-side timer and never reacts to the client going away:\n\n- `src/routes/sparql.ts` calls `withTimeout(client.sparql({ query: body.query }), sparqlTimeoutMs(env))`.\n- `withTimeout` rejects the route's promise at the deadline (`QUERY_TIMEOUT`), but **the underlying Comunica evaluation keeps running to completion** — the wasted Worker CPU and libsql reads outlive the timeout.\n- On **client disconnect there is no abort at all**: the query burns a Worker concurrency slot until it finishes or times out, even though the response can never be delivered. With per-key rate limiting (#39) and the beta's abuse layer, a disconnected long query is exactly the case that starves real traffic.\n\n### The mechanism now exists — this is just the missing link\n\n- `SparqlRequest.signal?: AbortSignal` landed via sparql-engine #122 (engine enforcement + per-boundary checks) and worlds-client-ts #159.\n- `Client.sparql(request)` forwards the whole request to `sparqlEngine.execute(request)` unchanged, and `ComunicaSparqlEngine.executeSparql` already races `request.signal` against the timeout (first wins, rejects with the signal's reason).\n- The route never passes a signal, so none of that fires from the API. The fetch `Request` in Hono (`c.req.raw.signal`) already aborts when the client disconnects — it just needs forwarding.\n\n**Prerequisite:** worlds-api pins `@jsr/worlds__client@0.0.18` (`node_modules/@jsr/worlds__client`), whose installed `SparqlRequest` has only `timeoutMs` — no `signal`. Bump to a release containing the #159 change (and `@jsr/worlds__libsql` if it needs the matching client) before wiring.\n\n### What to do — route layer (worlds-api)\n\n1. Bump `@jsr/worlds__client` (and `@jsr/worlds__libsql` as needed) to a version with `SparqlRequest.signal`.\n2. In `/worlds/{id}/sparql`, pass the disconnect signal and the env-configurable timeout into the request, and drop the route-level `withTimeout` race so the engine's single composed controller owns both:\n   `client.sparql({ query: body.query, signal: c.req.raw.signal, timeoutMs: sparqlTimeoutMs(env) })`.\n   The engine already rejects with the exact `\"SPARQL query timed out\"` message and clears its timer on completion — behavior parity with today's `QUERY_TIMEOUT`, one less manual race, and the abort path for free. (Alternative if we want to keep the route's timer as a hard server-side cap: keep `withTimeout` but *also* forward the signal; first rejection wins.)\n3. Handle the abort case explicitly: when `c.req.raw.signal` fires, the response cannot be delivered — catch the abort rejection and return without serializing a body, rather than writing a pointless 400/500 to a dead connection.\n\n### What to do — cancellation layer (worlds-libsql)\n\nForwarding the signal makes `executeSparql` **reject promptly**, but it does **not stop the evalua",
       "url": "https://github.com/wazootech/worlds-api/issues/46",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "feature"
     },
     {
       "id": "worlds-cloudflare-24",
@@ -139,7 +149,8 @@
       "title": "Adopt @worlds/sqlite/sql-core shared plan layer in @worlds/cloudflare (dedupe third copy)",
       "body": "Closes #23. worlds-cloudflare carries a third hand-copy of the driver-free SQLite plan layer that `@worlds/sqlite/sql-core` now owns (`@worlds/libsql` already adopted it, −261 lines). Research (#23) found the copies **byte-identical modulo names/doc-comments**; the keyword SQL differs by two cosmetic projections only.\n\nScope: this repo only. No public API removals — preserve `@worlds/cloudflare/search-index` exports via re-exports where a local symbol disappears (libsql precedent).\n\n## Checklist\n\n- [ ] Add `\"@worlds/sqlite\": \"jsr:@worlds/sqlite@^0.6.0\"` to `deno.json` imports (matches worlds-libsql pin); full `deno install --frozen=false` lock refresh\n- [ ] `d1-search-query-builder.ts`:\n  - [ ] Delete `D1_FTS_STOPWORDS` + local `sanitizeFtsQuery`/`generatePlaceholders`/`buildIncludeExcludeFilterClauses`/`ColumnMapping`; import from `@worlds/sqlite/sql-core`; keep the `public sanitizeFtsQuery()` wrapper and re-export for surface compat (libsql pattern)\n  - [ ] Replace inline keyword branch with `buildKeywordFtsStatement({sanitizedQuery, limit, whereFilter, filterArgs})` — accepted deltas: drops dead `rank AS score` column (zero consumers), adds harmless `chunks.id AS chunk_id`\n  - [ ] Decide `RRF_REFERENCE_CONSTANT` fate: alias `RRF_FUSION_K` (compat) or remove (breaking — check consumers first)\n  - [ ] Keep local: `buildInsertChunk` (Uint8Array blob bind for future Vectorize sync), empty-query fallback statement, dimension validation\n- [ ] Delete `search-chunk-fts.ts` (byte-identical to sql-core `fts-value.ts`); update `project-search-chunks.ts` import; re-export `buildChunkFtsValue` from `mod.ts`\n- [ ] Delete `build-search-result-id.ts` (code identical); import from sql-core; re-export from `mod.ts`\n- [ ] `d1-schema-builder.ts`: delegate `buildD1ChunksQuadIdIndex` / `buildD1ChunksFtsTable` / `buildD1ChunksTriggers` to shared emitters (LibsqlSchemaBuilder pattern); **keep `buildD1ChunksTable` local** (dialect-local `vector F32_BLOB(dim)` column)\n- [ ] Optional: dedupe `d1-quad-query-builder.ts`'s `generatePlaceholders` (libsql kept its quad-store-side copy local — either way acceptable)\n- [ ] Verify `deno task ci` green locally (fmt/lint/check/test incl. miniflare parity suite); existing `.includes()` schema assertions must pass unchanged against shared DDL text\n- [ ] Push; GitHub Actions CI green on head SHA before merge\n\nResearch evidence: #23 (adopt/keep-local tables, SQL diffs, packaging analysis).\n",
       "url": "https://github.com/wazootech/worlds-cloudflare/issues/24",
-      "legacyLabels": ["backlog"]
+      "legacyLabels": ["backlog"],
+      "gold": "feature"
     },
     {
       "id": "worlds-indexeddb-9",
@@ -148,7 +159,8 @@
       "title": "Export a test-polyfill convenience entrypoint for Deno consumers",
       "body": "## Context\n\nEvery test and example in this repo starts with `import \\\"fake-indexeddb/auto\\\"` because Deno has no native IndexedDB. The error messages in `IndexedDbStore` and `IdbChunkStore` already hint at this (`\\\"In Deno tests, import 'npm:fake-indexeddb/auto' first.\\\"`), but consumers testing their own code against `@worlds/indexeddb` in Deno have to independently discover and install `fake-indexeddb`.\n\n## Proposal\n\nRe-export the polyfill as a convenience entrypoint so consumers can write:\n\n```typescript\nimport \\\"@worlds/indexeddb/testing\\\";\n```\n\ninstead of managing `fake-indexeddb` as a separate dependency. This could be as simple as:\n\n```typescript\n// src/indexeddb/testing.ts\nimport \\\"fake-indexeddb/auto\\\";\n```\n\nExported from `deno.json`:\n\n```json\n\\\"exports\\\": {\n  \\\".\\\": \\\"./src/mod.ts\\\",\n  \\\"./rdfjs-store\\\": \\\"./src/indexeddb/rdfjs-store/mod.ts\\\",\n  \\\"./search-index\\\": \\\"./src/indexeddb/search-index/mod.ts\\\",\n  \\\"./sdk\\\": \\\"./src/indexeddb/sdk/mod.ts\\\",\n  \\\"./testing\\\": \\\"./src/indexeddb/testing.ts\\\"\n}\n```\n\n## Why this matters\n\n- **Discoverability** — consumers see `@worlds/indexeddb/testing` in the exports and know the Deno test story is supported, not an afterthought.\n- **Single dependency** — no need to separately `npm:fake-indexeddb` in `deno.json` imports.\n- **Consistent with `@worlds/sdk/testing`** — the SDK already ships a testing entrypoint; the IndexedDB backend should follow the same pattern.\n- **Zero runtime cost in production** — the `testing` entrypoint is only imported in test/example files; bundlers and tree-shaking never touch it.\n\n## Open question\n\nShould `fake-indexeddb` move from `devDependencies` (or `imports`) to a regular `imports` entry so it resolves for consumers, or should the `testing.ts` file use a bare `npm:fake-indexeddb/auto` import that Deno resolves at usage time?\n\n🤖 Generated with Codebuff\nCo-Authored-By: Codebuff <noreply@codebuff.com>",
       "url": "https://github.com/wazootech/worlds-indexeddb/issues/9",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "worlds-client-ts-3",
@@ -157,7 +169,8 @@
       "title": "sync-openapi fallback: switch to worlds-api.wazoo.dev after prod/main spec sync",
       "body": "## Context\n\n`scripts/sync-openapi.ts` falls back to a remote spec when no sibling `worlds-api` checkout exists (CI). A local tweak briefly pointed that fallback at the production endpoint (`https://worlds-api.wazoo.dev/openapi.json`) and pushed to `main`; CI's `openapi:check` failed with \"openapi/openapi.json is stale\", proving the deployed spec has drifted from what `worlds-api@main` serves via raw.githubusercontent.\n\nReverted on `main` in 8eed182 to restore green CI. The underlying goal stands: stop depending on raw.githubusercontent availability for the fallback.\n\n## Blocker\n\nProduction currently serves an OpenAPI document that differs from the repo snapshot — switching the fallback before worlds-api redeploys a spec matching `main` will keep breaking `openapi:check`.\n\n## Steps\n\n1. Diff prod vs main: `curl -s https://worlds-api.wazoo.dev/openapi.json` against `openapi/openapi.json` here; identify which side is stale.\n2. Land/redeploy the missing spec changes on worlds-api so prod == main.\n3. Re-apply the fallback URL change (revert-of-revert 8eed182), run `deno task sync:openapi` if the snapshot legitimately moved, and confirm `deno task ci` green.\n",
       "url": "https://github.com/wazootech/worlds-client-ts/issues/3",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "worlds-sdk-ts-198",
@@ -176,7 +189,8 @@
       "title": "LibSQL re-key migration for the new hashQuad ID scheme",
       "body": "## Context\nThe worlds-sdk-ts quad ID scheme is changing to canonical N-Quads + SHA-256 + `q2.` prefix (worlds-sdk-ts #187). LibSQL persists the hash as the primary/foreign key:\n\n- `quads.id TEXT PRIMARY KEY` = hash → **must be re-keyed**\n- `chunks.quad_id` = hash (+ `vector32`) → **remap or reindex**\n\n## Plan\n1. **Backup:** `turso db shell <db> \".backup\"` or full dump; keep in object storage. Record row counts.\n2. **Quads re-key (app-side):** page rows → reconstruct quads → recompute IDs with the pinned SDK → bulk-insert into `quads_new` → verify (counts match, no duplicate ids, sampled recompute) → `ALTER TABLE ... RENAME` swap; keep `quads_old` for rollback.\n3. **Chunks:** remap `quad_id` old→new (preserves `vector32`; FTS content_rowid unchanged) or full reindex via `client.reindex()` (regenerates embeddings).\n\n## Ordering\nWrite freeze → migrate → deploy new SDK hashing. Never run old and new hashing against the same table (novel-insertion dedup would duplicate everything; deletion-by-id would miss).\n\n## Related\nworlds-sdk-ts #187 (scheme), worlds-cloudflare (same migration shape), worlds-postgres (chunk remap).",
       "url": "https://github.com/wazootech/worlds-libsql/issues/29",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "feature"
     },
     {
       "id": "worlds-postgres-36",
@@ -185,7 +199,8 @@
       "title": "Research: sql-core applicability to the PostgreSQL adapter (expected: document non-alignment)",
       "body": "## Context\n\n`@worlds/sqlite@0.6.0` publishes the driver-free `./sql-core` plan layer shared across **SQLite-family** backends (already adopted by `@worlds/libsql`, research pending for `@worlds/cloudflare`). Before this repo can be considered, applicability must be established — early inspection says **mostly non-applicable**, and this ticket exists to confirm that properly rather than assume it.\n\n## Current state (verified 2026-08-23)\n\n- Search pipeline is PostgreSQL-native: generated `tsvector` column + `plainto_tsquery(ftsLanguage, …)` keyword branch (configurable regconfig, default `\"english\"`), pgvector cosine vector branch, RRF hybrid fusion in `src/postgres/search-index/postgres-search-index.ts`\n- None of the SQLite-family twins exist here: no `sanitizeFtsQuery` (PG's query grammar is entirely different — the FTS5 sanitizer is explicitly **not portable**), no `search-chunk-fts.ts`, no `build-search-result-id.ts`, no `fts_value` column, and no `hashQuad`-derived result ids found anywhere in `src/`\n\n## Research questions\n\n1. **Policy-level shares worth taking despite the dialect split:**\n   - Chunk-text contract (parity #22): object-literal-only indexing semantics — does this repo's chunker honor the same contract, and should it reference a shared policy definition instead of an implicit one?\n   - Stable cross-backend `SearchResult.id` derivation: sqlite/libsql/cloudflare derive ids via the engine's `hashQuad`. Does postgres need aligned ids for any cross-backend scenario, or are its results consumed only within its own backend?\n2. **Anything else portable?** Expected answer: no — `$n` placeholder binding differs from sql-core's `?`-placeholder `{sql, args}` plans, so even the `SqlStatement` type doesn't transfer cleanly.\n3. **If nothing adopts (likely):** document non-alignment in this repo and cross-link it from worlds-sdk-ts ARCHITECTURE.md so future adapters know `sql-core` is deliberately SQLite-family-scoped.\n\n## Acceptance\n\n- [ ] Written adopt/skip decision per question above\n- [ ] If non-alignment confirmed: documented here and cross-linked from the sdk's backend topology section\n",
       "url": "https://github.com/wazootech/worlds-postgres/issues/36",
-      "legacyLabels": ["backlog"]
+      "legacyLabels": ["backlog"],
+      "gold": "docs"
     },
     {
       "id": "worlds-sqlite-17",
@@ -194,7 +209,8 @@
       "title": "Update dependencies to latest via deno update --latest",
       "body": "Run `deno update --latest` and confirm everything still works. Note that `--latest` ignores semver ranges, so expect possible major jumps; fix forward for small breakage, pin back + file a follow-up issue when a single dep balloons into a real migration.\n\n## Steps\n\n1. Baseline from the workspace root: `deno task workspace:check`\n2. Create a worktree (never develop directly on `main`):\n\n   ```sh\n   git -C repos/worlds-sqlite worktree add \"$PWD/worktrees/worlds-sqlite/bump-deps\" -b bump-deps\n   ```\n\n3. Update in the worktree:\n\n   ```sh\n   deno update --latest\n   ```\n\n4. Verify:\n\n   ```sh\n   deno task ci\n   ```\n\n   Benches are separate (`bench`, `bench:record`, `bench:check`) — run at least `bench:check` if vector-search behavior could have shifted.\n5. One atomic commit (`Update dependencies to latest`), push, open a PR, wait for remote CI green before merge.\n6. After merge: remove and prune the worktree, delete the branch.\n\n## Risk notes (medium)\n\n- `sqlite-vec ^0.1.9` — pre-1.0 native extension; API/ABI drift affects match() and vector search tests.\n- `@types/node ^22.10.0` — will jump to the current Node major line.\n- Internal JSR pins jump to registry-latest: `@worlds/sdk ^0.4.0` (+ subpath exports), `@wazoo/sparql-engine ^0.4.1` (+ `/term` subpath).\n\n_Scanned 2026-08-22 against `deno.json` imports on `main`._\n",
       "url": "https://github.com/wazootech/worlds-sqlite/issues/17",
-      "legacyLabels": ["backlog"]
+      "legacyLabels": ["backlog"],
+      "gold": "feature"
     },
     {
       "id": "wazoo-factory-40",
@@ -203,7 +219,8 @@
       "title": "Define the quality gate matrix by change type",
       "body": "## Question\n\nFor each category of repository change, which quality gates must pass before the workflow advances past verification? This defines the deterministic gate matrix that the verification phase (workflow #31) executes against.\n\n### Change categories to cover\n\n1. **API contract changes** — new endpoints, modified request/response schemas, breaking changes\n2. **Schema / migration changes** — database schema additions, Turso migrations, column additions\n3. **Search / reindex changes** — SPARQL engine changes, search index modifications, reindex triggers\n4. **Console changes** — UI components, route changes, auth flows, consent/privacy surfaces\n5. **Documentation changes** — docs.wazoo.dev content, API reference, guides\n6. **Infrastructure changes** — Cloudflare Workers config, deployment scripts, CI/CD, environment variables\n7. **Cross-cutting changes** — changes that touch multiple categories simultaneously\n\n### Decisions to resolve\n\n- **Gate set per category**: Which of the standard gates (format, typecheck, test, build, generated-file, doc, changed-file, secret-scan, smoke) apply to each category? Are there category-specific gates?\n- **Minimum gate subset**: What is the absolute minimum gate set that must always run regardless of change type (e.g., format + typecheck + secret-scan)?\n- **Category-specific gates**: Does a schema change require migration dry-run? Does an API contract change require OpenAPI diff? Does a console change require visual regression or a11y check?\n- **Changed-file boundaries**: How does the factory determine which gates are relevant? Content-based (file paths in the diff)? Label-based (the classifier from the issue picker map)? Both?\n- **Smoke test selection**: Which smoke tests run for which categories? How are they discovered from the repository?\n- **Failure severity**: Are any gates advisory-only (warn but don't block) vs hard-blocking? Under what conditions?\n- **Gate ordering**: Is there a required execution order (e.g., format before typecheck, test before build)?\n\n### Context\n\n- The 6 workflow phases are locked: intake → planning → implementation → verification → review → draft-pr (per #31).\n- The gate system scope is defined: format, typecheck, test, build, generated-file, doc, changed-file, secret-scan, smoke (per workspace#32).\n- The repository family spans: wazoo-api, worlds-api, wazoo-console, worlds-client-ts, worlds-libsql, worlds-sqlite, worlds-postgres, worlds-cloudflare, worlds-indexeddb, sparql-engine, docs.wazoo.dev, wazoo-e2e, wazoo-factory.\n- The factory manifest (repo-level config) will declare per-repo gate overrides — this ticket defines the defaults.\n\n### Blocked by\n\nNothing — this is a standalone design decision informed by #31 and workspace#32's scope.",
       "url": "https://github.com/wazootech/wazoo-factory/issues/40",
-      "legacyLabels": ["wayfinder:grilling"]
+      "legacyLabels": ["wayfinder:grilling"],
+      "gold": "feature"
     },
     {
       "id": "workspace-cli-33",
@@ -232,7 +249,8 @@
       "title": "Fail loudly when DEEPSEEK_API_KEY is missing instead of borrowing OPENAI_API_KEY",
       "body": "## Question\n\nWhat happens when a DeepSeek judge is initialized with no `DEEPSEEK_API_KEY`?\n\nToday `getJudgeConfig(\"deepseek\")` returns `{ apiKey: config.deepseekApiKey }`, where `deepseekApiKey = process.env.DEEPSEEK_API_KEY || \"\"`. An empty string flows into `OpenAIJudge.initialize` → `createOpenAI({ apiKey: \"\" })`, which can silently fall back to `OPENAI_API_KEY` — borrowing an OpenAI credential against `api.deepseek.com` (or, worse, an empty-key default that bills the wrong account). No loud failure, no clear message.\n\nResolve: the missing-key policy — fail fast with a clear error naming `DEEPSEEK_API_KEY`, versus an explicit empty-key default — so DeepSeek never silently borrows another provider's credential.\n\nBlocked by: **Swap DeepSeek judge + answer paths from the AI SDK to a dedicated DeepSeek client** — the client swap moves key/base-URL resolution into the new client, so this decision lands on top of it.\n",
       "url": "https://github.com/wazootech/wazoo-memorybench/issues/32",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "bug"
     },
     {
       "id": "workspace-105",
@@ -241,7 +259,8 @@
       "title": "Verify and delete workspace sediment",
       "body": "## Question\n\nIs the sediment actually sediment — provably, per artifact, before deletion?\n\nVerify then remove:\n1. The accidental nested checkout `repos/docs.wazoo.dev/repos/repos/worktrees/docs.wazoo.dev/flip-maturity-ladder/` — confirm via tip-diff vs its claimed upstream that it holds no unique work, then delete the stray directories.\n2. `repos/wazoo-factory/.eve/compile/workspace-resources/__root__/skills/neon*/` — word-level drift from their sources in `agent/skills/neon*/` was confirmed formatter-only (frontmatter quoting); align or mark per whatever the law ticket lands, and record the choice.\n\nReport every deletion with its evidence (diff refs checked). Nothing is deleted on faith.\n\n**Part of** #95.\n\nDone when: nested checkout gone with evidence posted; mirror decision recorded; affected repos' checks still green.\n",
       "url": "https://github.com/wazootech/workspace/issues/105",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "bug"
     },
     {
       "id": "docs.wazoo.dev-131",
@@ -250,7 +269,8 @@
       "title": "Drift detected on flip-maturity-ladder",
       "body": "The drift detection workflow failed on refs/heads/flip-maturity-ladder.\n\nChecks that ran: format:check (prettier), check (mintlify validate), broken-links.\n\nSee the failing run: https://github.com/wazootech/docs.wazoo.dev/actions/runs/32314013410\n\nThis issue was opened automatically by the workflow. Close it once the drift is fixed.",
       "url": "https://github.com/wazootech/docs.wazoo.dev/issues/131",
-      "legacyLabels": ["drift-detection"]
+      "legacyLabels": ["drift-detection"],
+      "gold": "bug"
     },
     {
       "id": "linked-markdown-10",
@@ -259,7 +279,8 @@
       "title": "spec: streamline conformance cases to flat JSON-LD and remove body-links expectations",
       "body": "### Summary\\nThe Linked Markdown spec and conformance suite currently contain legacy envelope fixtures (frontmatter, types[], links[]) and body link extraction expectations that are no longer part of the minimal core parser API.\\n\\n### Proposed Changes\\n\\n1. **Remove links array from core parse output**:\\n   - Strip links array from conformance/cases/body-links/expected.json.\\n   - Update spec/index.md Section 3.6 to reflect that body link extraction is an optional/separate extension, not a default parse() envelope property.\\n\\n2. **Strict Flat JSON-LD Conformance Fixtures**:\\n   - Ensure all conformance/cases/*/expected.json fixtures strictly assert flat JSON-LD nodes (@id, @type, @context, custom properties).\\n   - Update manifest.json tier definitions for LMD-Core to require flat JSON-LD normalization.\\n\\n3. **Simplify Spec Glossary & Envelope Docs**:\\n   - Deprecate references to top-level types[] and frontmatter envelope wrappers in spec/index.md.\"",
       "url": "https://github.com/wazootech/linked-markdown/issues/10",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "docs"
     },
     {
       "id": "wazoo-api-36",
@@ -268,7 +289,8 @@
       "title": "Replace raw fetch to worlds-api admin endpoints with generated @worlds/client",
       "body": "Context: wazoo-api is the platform plane and acts as a policy facade over worlds-api admin endpoints (/worlds, /api-keys). Those calls are hand-rolled raw fetch with WORLDS_API_ADMIN_KEY (src/routes/worlds.ts, src/routes/users.ts). @worlds/client is the generated type-safe data-plane HTTP client (repo wazootech/worlds-client-ts); its OpenAPI doc already includes the admin-keyed surface.\n\nTask: replace the raw fetch calls to worlds-api.wazoo.dev admin endpoints with @worlds/client (world create/update/suspend/resume/undelete/delete, api-key create/list/delete, and any other admin-keyed calls). Keep platform-policy logic (quotas, billing, MAX_WORLDS_EXCEEDED) in wazoo-api; the client is only the transport.\n\nDependency: @worlds/client@0.1.0 publish currently fails with actorNotAuthorized until the @worlds JSR scope authorizes wazootech/worlds-client-ts.",
       "url": "https://github.com/wazootech/wazoo-api/issues/36",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "wazoo-console-57",
@@ -277,7 +299,8 @@
       "title": "Show privacy policy and terms during signup",
       "body": "The sign-in screen has no links to a privacy policy or terms. Add links beside the submit button with a plain-language sentence on what we collect. That covers the \"we collect user data\" disclosure and gives us a documented consent point.\n\nScope:\n- Add privacy policy and terms links on the sign-in/signup screen\n- Add a short plain-language statement about what data the console collects\n- Link to the same legal pages surfaced on wazoo.dev so the wording stays consistent\n\nDepends on the legal pages existing (tracked in wazoo.dev).\n",
       "url": "https://github.com/wazootech/wazoo-console/issues/57",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "feature"
     },
     {
       "id": "wazoo.dev-6",
@@ -286,7 +309,8 @@
       "title": "Create wazoo.dev/design.md",
       "body": "Quote tweet: https://x.com/rauchg/status/2067586339021734029?s=46",
       "url": "https://github.com/wazootech/wazoo.dev/issues/6",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "docs"
     },
     {
       "id": "wiki-249",
@@ -295,7 +319,8 @@
       "title": "Code-wiki sync: default to drift-free docs — line numbers and machine-specific numbers become opt-in",
       "body": "## What\n\nThe `wiki-sync` skill (`skills/wiki-sync/SKILL.md`) defines the general language every code wiki follows. Today it *requires* wiki pages to carry byte-exact line citations, test counts, and — via the sparql-engine wiki it was built for — machine-specific benchmark/memory/latency snapshots. Those artifacts are inherently drift-prone: they change when a file grows a line, when a Deno version or machine re-times a benchmark, or when a test is added — not when anything a reader cares about changed. Every sync therefore produces a noisy diff full of renumbered citations and refreshed snapshot tables, and the skill needs a periodic \"sweep\" precisely because incremental syncs cannot keep these numbers truthful.\n\nProposal: make the drift-resistant style the skill's **default** — wiki docs carry no line numbers and no machine-specific measurement numbers by default, with the live numbers living in README.md (the one place they are already regenerated from `bench/*-data.json`) — while keeping the detailed style available as an **opt-in option** for consumers who want it. Not a ban: different consumers of the skill have different needs, and the policy should be configurable per repo.\n\n## Why the current language forces drift\n\nConcrete examples from `wazootech/sparql-engine`, the wiki the skill was built for:\n\n- **Line citations.** `docs/04-source-map.md` cites roughly 150 symbol lines (`SparqlEngineInterface` L5, `WazooSparqlEngine` L82, `patternListContainsExists` L1214, …). Any growth of even one line above a declaration invalidates every citation below it. The maintenance doc itself admits this: \"a 300-line addition invalidates every line citation in that file\" — which is why the skill mandates full-tree sweeps that renumber dozens of lines per sweep (last sweep 2026-08-14 \"renumbered every drifted line in `04-source-map.md`\"). That is a maintenance tax, not documentation.\n- **Machine-specific measurement numbers.** `docs/07-benchmarking.md` and `docs/README.md` duplicate README.md's latency tables (ms/iter per engine), on-disk sizes (0.67 / 7.9 / 28.3 MiB), and peak-heap tables (150 / 214 / 255 MiB), all labeled \"Snapshot measured on a Windows desktop, Deno 2.9.5 … Machine-specific — run `deno task bench` for your own numbers.\" Numbers that are explicitly machine-specific change with hardware, Deno versions, and run-to-run noise, so syncing them into the wiki is pure diff noise with no reader value — unless a consumer explicitly wants them.\n- **Test / size counts.** `04-source-map.md` records generated-parser sizes (\"9878 lines\", \"2618 lines\") and suite sizes (\"4,251-line engine integration suite\"); `05-testing.md` records W3C totals (345/31) that have already drifted once (documented 336/23 vs runner 345/31).\n\nNone of these numbers tell a reader anything structural about the code. What they guarantee today is that almost every source commit needs a docs follow-up.\n\n## Proposed default policy\n\nAdd to `skills/wiki-sync/SKILL.md` (and mirror into",
       "url": "https://github.com/wazootech/wiki/issues/249",
-      "legacyLabels": ["documentation", "enhancement"]
+      "legacyLabels": ["documentation", "enhancement"],
+      "gold": "docs"
     },
     {
       "id": "wiki-templates-2",
@@ -304,7 +329,8 @@
       "title": "ci: add workflow validating template references and wiki checks",
       "body": "The wiki-templates repo has no CI workflow, so template reference changes (like #1) land unverified. Add a workflow that at minimum validates all template \\wiki.yml\\ files parse and run \\wiki -c <dir>/wiki.yml check --strict\\ (or the template-specific commands) for each template directory.",
       "url": "https://github.com/wazootech/wiki-templates/issues/2",
-      "legacyLabels": []
+      "legacyLabels": [],
+      "gold": "feature"
     },
     {
       "id": "worlds-api-34",
@@ -313,7 +339,8 @@
       "title": "Verify world data storage is private",
       "body": "No public bucket showed up in a scan of the codebase; world data sits in per-world databases with scoped tokens. So the \"public storage bucket\" item from the audit does not apply as-is. Still, verify the access model holds.\n\nVerify:\n- Only the owning user and their scoped tokens can read a world\n- Import/export endpoints do not expose data without auth\n- No object storage or presigned URL path is open to anonymous reads\n- Document the result here and close out if the model already holds\n",
       "url": "https://github.com/wazootech/worlds-api/issues/34",
-      "legacyLabels": ["wayfinder:task"]
+      "legacyLabels": ["wayfinder:task"],
+      "gold": "docs"
     },
     {
       "id": "worlds-cloudflare-23",
@@ -322,7 +349,8 @@
       "title": "Research: adopt @worlds/sqlite/sql-core shared plan layer (dedupe third copy)",
       "body": "## Context\n\n`@worlds/sqlite@0.6.0` now publishes a driver-free SQL plan layer (`./sql-core`: FTS sanitizer/stopwords, `buildChunkFtsValue`, `buildSearchResultId`, filter-clause helpers, `chunks_fts` DDL/triggers emitters, keyword FTS5 branch plans, `SqlStatement` plan type). It is the designated **source of truth for SQLite-family SQL logic**, enforced by an import-allowlist purity gate (`deno task sql-core:purity`). `@worlds/libsql` already adopted it ([worlds-libsql#38](https://github.com/wazootech/worlds-libsql/pull/38), −261 duplicated lines).\n\nThis repo carries a **third copy** of the same logic and is the natural next adopter.\n\n## Verified inventory (2026-08-23)\n\n- `src/cloudflare/search-index/d1-search-query-builder.ts` — `sanitizeFtsQuery` + stopword set + `generatePlaceholders` + `buildIncludeExcludeFilterClauses`/`ColumnMapping` (docstrings are twins of sql-core's)\n- `src/cloudflare/quad-store/d1-quad-query-builder.ts` — the same filter-clause helpers again\n- `src/cloudflare/search-index/search-chunk-fts.ts` — twin of core `buildChunkFtsValue`\n- `src/cloudflare/search-index/build-search-result-id.ts` — near-twin of core\n- `src/cloudflare/schema/d1-schema-builder.ts` — `chunks_fts` FTS5 external-content DDL + `chunks_ai`/`chunks_ad` sync triggers + `idx_chunks_quad_id` (byte-equivalent text to core emitters)\n- `src/cloudflare/search-index/project-search-chunks.ts` — chunk-projection twin\n\n## Research questions\n\n1. **Keyword branch drift:** diff the D1 keyword-only plan against core's `buildKeywordFtsStatement`. The sqlite and libsql implementations had drifted from each other; adopt only where emitted SQL is byte-identical, keep local otherwise (same rule libsql used).\n2. **FTS5 parity on D1:** confirm external-content FTS5 virtual tables + sync triggers behave identically on D1's managed SQLite build (D1 supports FTS5 but has no extension loading — which is exactly why this repo emits no vec0/native-vector SQL).\n3. **Packaging:** verify a Workers/wrangler bundle importing `jsr:@worlds/sqlite/sql-core` pulls zero `node:sqlite` (on-demand subpath resolution should guarantee this — prove it once in CI or a scratch worker).\n4. **Keep local by design:** quads table layout, chunks table DDL (its F32_BLOB-width column reserved for Vectorize sync), and all Vectorize interplay stay in this repo.\n\n## Acceptance\n\n- [ ] Adopt/keep-local decision recorded per inventory item, with SQL-diff notes where relevant\n- [ ] If adopting: implementation follow-up filed (pin `jsr:@worlds/sqlite@^0.6`, delete twins, `deno task ci` green including parity suite)\n- [ ] Cross-link: worlds-sdk-ts ARCHITECTURE.md still calls this repo \"Scaffold only — nothing shipped\" despite 0.3.0 shipping (docs ticket filed on worlds-sdk-ts)\n",
       "url": "https://github.com/wazootech/worlds-cloudflare/issues/23",
-      "legacyLabels": ["backlog"]
+      "legacyLabels": ["backlog"],
+      "gold": "feature"
     },
     {
       "id": "worlds-indexeddb-6",
@@ -341,7 +369,8 @@
       "title": "Update dependencies to latest via deno update --latest",
       "body": "Run `deno update --latest` and confirm everything still works. Note that `--latest` ignores semver ranges, so expect possible major jumps; fix forward for small breakage, pin back + file a follow-up issue when a single dep balloons into a real migration.\n\n## Steps\n\n1. Baseline from the workspace root: `deno task workspace:check`\n2. Create a worktree (never develop directly on `main`):\n\n   ```sh\n   git -C repos/worlds-sdk-ts worktree add \"$PWD/worktrees/worlds-sdk-ts/bump-deps\" -b bump-deps\n   ```\n\n3. Update in the worktree:\n\n   ```sh\n   deno update --latest\n   ```\n\n4. Verify:\n\n   ```sh\n   deno task ci\n   ```\n\n   Docs are generated — include `deno task doc:json` freshness in verification if CI checks generated artifacts.\n5. One atomic commit (`Update dependencies to latest`), push, open a PR, wait for remote CI green before merge.\n6. After merge: remove and prune the worktree, delete the branch.\n\n## Risk notes (medium)\n\n- Internal pin `@worlds/sqlite ^0.1.0` will jump several published 0.x versions (this repo itself is at 0.5.0 while the sqlite impl repo is at 0.4.0) — expect the range rewrite to be large; check the sqlite changelog between 0.1.x and latest.\n- AI stack mostly current (`ai ^6.0.195`, `zod ^4.4.3`, `@langchain/core ^1.1.48`) but patch/minor drift can alter embedding output shapes used by search-index tests.\n- `@tensorflow/tfjs ^4.22.0` + wasm backend must stay version-matched.\n\n_Scanned 2026-08-22 against `deno.json` imports on `main`._\n",
       "url": "https://github.com/wazootech/worlds-sdk-ts/issues/194",
-      "legacyLabels": ["backlog"]
+      "legacyLabels": ["backlog"],
+      "gold": "feature"
     },
     {
       "id": "worlds-libsql-27",
@@ -360,7 +389,8 @@
       "title": "Update dependencies to latest via deno update --latest",
       "body": "Run `deno update --latest` and confirm everything still works. Note that `--latest` ignores semver ranges, so expect possible major jumps; fix forward for small breakage, pin back + file a follow-up issue when a single dep balloons into a real migration.\n\n## Steps\n\n1. Baseline from the workspace root: `deno task workspace:check`\n2. Create a worktree (never develop directly on `main`):\n\n   ```sh\n   git -C repos/worlds-postgres worktree add \"$PWD/worktrees/worlds-postgres/bump-deps\" -b bump-deps\n   ```\n\n3. If any credentialed example or bench is exercised, sync local credentials from the vault (do not edit `.env` files by hand in checkouts):\n\n   ```sh\n   deno task workspace:sync-env\n   ```\n\n4. Update in the worktree:\n\n   ```sh\n   deno update --latest\n   ```\n\n5. Verify:\n\n   ```sh\n   deno task ci\n   ```\n\n6. One atomic commit (`Update dependencies to latest`), push, open a PR, wait for remote CI green before merge.\n7. After merge: remove and prune the worktree, delete the branch.\n\n## Risk notes (medium)\n\n- `@electric-sql/pglite ^0.3.0` (and the `/vector` subpath entry) — pre-1.0; storage-format changes between minors can invalidate local PGlite data dirs, and **both pglite entries must land on the same version** after the update.\n- `postgres ^3.4.5`, `pgvector ^0.2.0` — stable-ish, low risk.\n- Internal JSR pins jump to registry-latest: `@worlds/sdk ^0.4.0` (+ subpath exports) and `@wazoo/sparql-engine ^0.4.1`.\n\n_Scanned 2026-08-22 against `deno.json` imports on `main`._\n",
       "url": "https://github.com/wazootech/worlds-postgres/issues/29",
-      "legacyLabels": ["backlog"]
+      "legacyLabels": ["backlog"],
+      "gold": "feature"
     },
     {
       "id": "worlds-sqlite-12",
