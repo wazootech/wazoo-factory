@@ -5,7 +5,7 @@ import {
   LABEL_CAP,
   REPOSITORY_CAP,
   TITLE_CAP,
-} from "./classifier-schema.ts";
+} from "./classifier/schema.ts";
 
 // GitHub webhook ingestion (#35). Pure decision core here; the Eve channel in
 // agent/channels/github.ts is a thin composition over createRouteHandler.

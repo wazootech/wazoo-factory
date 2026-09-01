@@ -1,9 +1,9 @@
 import {
   buildSystemPrompt,
   buildUserPrompt,
-} from "./classifier-eval/prompt.ts";
+} from "./eval/prompt.ts";
 import type { z } from "zod";
-import type { ClassificationInput } from "./classifier-schema.ts";
+import type { ClassificationInput } from "./schema.ts";
 
 // Prompt surface for the classifier Eve tool (#37). The taxonomy and output
 // discipline live in the shared harness prompt (#36 resolution); this module

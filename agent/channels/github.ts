@@ -4,7 +4,7 @@ import {
   createLazyLiveDeps,
   formatClassificationAudit,
   resolveLiveClassifierEnv,
-} from "@/factory/classifier.ts";
+} from "@/factory/classifier/classifier.ts";
 import {
   createRouteHandler,
   type WebhookIssueInput,

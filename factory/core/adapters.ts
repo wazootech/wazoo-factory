@@ -90,6 +90,22 @@ export interface GitHubAdapter {
     head: string;
     base: string;
   }): Promise<DraftPullRequest>;
+  postIssueComment(
+    repository: string,
+    issueNumber: number,
+    body: string,
+  ): Promise<{ id: number; html_url: string }>;
+  addLabel(
+    repository: string,
+    issueNumber: number,
+    label: string,
+  ): Promise<void>;
+  ensureLabel(
+    repository: string,
+    label: string,
+    color: string,
+    description?: string,
+  ): Promise<void>;
 }
 
 type GitHubAppOptions = {
@@ -219,6 +235,50 @@ export class GitHubAppAdapter implements GitHubAdapter {
       artifactDigest: "",
     };
   }
+
+  async postIssueComment(
+    repository: string,
+    issueNumber: number,
+    body: string,
+  ) {
+    return this.api<{ id: number; html_url: string }>(
+      `/repos/${repository}/issues/${issueNumber}/comments`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      },
+    );
+  }
+
+  async addLabel(
+    repository: string,
+    issueNumber: number,
+    label: string,
+  ) {
+    await this.api(`/repos/${repository}/issues/${issueNumber}/labels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ labels: [label] }),
+    });
+  }
+
+  async ensureLabel(
+    repository: string,
+    label: string,
+    color: string,
+    description?: string,
+  ) {
+    try {
+      await this.api(`/repos/${repository}/labels/${encodeURIComponent(label)}`);
+    } catch {
+      await this.api(`/repos/${repository}/labels`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: label, color, description }),
+      });
+    }
+  }
 }
 
 export class GhAdapter implements GitHubAdapter {
@@ -276,6 +336,64 @@ export class GhAdapter implements GitHubAdapter {
       revision: result.headRefOid,
       artifactDigest: "",
     };
+  }
+
+  async postIssueComment(
+    repository: string,
+    issueNumber: number,
+    body: string,
+  ) {
+    const result = (await this.run([
+      "issue",
+      "comment",
+      "--repo",
+      repository,
+      String(issueNumber),
+      "--body",
+      body,
+      "--json",
+      "id,url",
+    ])) as { id: number; url: string };
+    return { id: result.id, html_url: result.url };
+  }
+
+  async addLabel(
+    repository: string,
+    issueNumber: number,
+    label: string,
+  ) {
+    await this.run([
+      "issue",
+      "edit",
+      "--repo",
+      repository,
+      String(issueNumber),
+      "--add-label",
+      label,
+    ]);
+  }
+
+  async ensureLabel(
+    repository: string,
+    label: string,
+    color: string,
+    description?: string,
+  ) {
+    const args = [
+      "label",
+      "create",
+      label,
+      "--repo",
+      repository,
+      "--color",
+      color,
+    ];
+    if (description) args.push("--description", description);
+    try {
+      await this.run(args);
+    } catch {
+      // Label may already exist; gh exits non-zero but that's acceptable.
+    }
   }
 }
 

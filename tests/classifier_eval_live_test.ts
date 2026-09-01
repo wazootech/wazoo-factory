@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { loadCases } from "@/factory/classifier-eval/cases.ts";
-import { createSchemaValidatedClassifier } from "@/factory/classifier-eval/classify.ts";
+import { loadCases } from "@/factory/classifier/eval/cases.ts";
+import { createSchemaValidatedClassifier } from "@/factory/classifier/eval/classify.ts";
 import {
   scorePredictions,
   summarizeGate,
   type ScoreInput,
-} from "@/factory/classifier-eval/score.ts";
-import { renderReport } from "@/factory/classifier-eval/report.ts";
-import type { Classification } from "@/factory/classifier-eval/schema.ts";
+} from "@/factory/classifier/eval/score.ts";
+import { renderReport } from "@/factory/classifier/eval/report.ts";
+import type { Classification } from "@/factory/classifier/eval/schema.ts";
 
 // Live eval per the #39 resolution. Gated on credentials so CI never calls a
 // model; run manually with any OpenAI-compatible gateway (e.g. Vercel AI Gateway):
@@ -39,7 +39,7 @@ describe.skipIf(!liveEnabled)("classifier eval (live)", () => {
     { timeout: 3_600_000 },
     async () => {
       const { createLiveGenerate } =
-        await import("@/factory/classifier-eval/classify.ts");
+        await import("@/factory/classifier/eval/classify.ts");
       const classify = createSchemaValidatedClassifier({
         generate: await createLiveGenerate({
           baseUrl: baseUrl as string,

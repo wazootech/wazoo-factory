@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { HmacApprovalSigner, newApproval } from "@/factory/authorization.ts";
+import { HmacApprovalSigner, newApproval } from "@/factory/core/authorization.ts";
 import type {
   GitHubAdapter,
   ReviewAdapter,
   SandboxAdapter,
   VerificationAdapter,
   WorkspaceAdapter,
-} from "@/factory/adapters.ts";
+} from "@/factory/core/adapters.ts";
 import {
   digestArtifact,
   type ChangeRequest,
   type Plan,
-} from "@/factory/contracts.ts";
-import { MemoryWorkflowStore } from "@/factory/storage.ts";
-import { FactoryWorkflow } from "@/factory/workflow.ts";
+} from "@/factory/core/contracts.ts";
+import { MemoryWorkflowStore } from "@/factory/core/storage.ts";
+import { FactoryWorkflow } from "@/factory/core/workflow.ts";
 
 const request: ChangeRequest = {
   id: "workflow-e2e",
@@ -82,6 +82,11 @@ class FakeGitHub implements GitHubAdapter {
       artifactDigest: "a".repeat(64),
     };
   }
+  async postIssueComment() {
+    return { id: 1, html_url: "https://github.com/wazootech/example/issues/1#comment-1" };
+  }
+  async addLabel() {}
+  async ensureLabel() {}
 }
 
 const sandbox: SandboxAdapter = {

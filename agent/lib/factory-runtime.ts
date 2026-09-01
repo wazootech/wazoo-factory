@@ -1,15 +1,15 @@
 import { PGlite } from "@electric-sql/pglite";
 import postgres from "postgres";
-import { createNeonDatabase } from "@/factory/neon.ts";
-import { pgliteDatabase } from "@/factory/pglite.ts";
-import { PostgresWorkflowStore } from "@/factory/postgres-storage.ts";
-import { JsonWorkflowStore, type WorkflowStore } from "@/factory/storage.ts";
+import { createNeonDatabase } from "@/factory/core/neon.ts";
+import { pgliteDatabase } from "@/factory/core/pglite.ts";
+import { PostgresWorkflowStore } from "@/factory/core/postgres-storage.ts";
+import { JsonWorkflowStore, type WorkflowStore } from "@/factory/core/storage.ts";
 import type { ToolContext } from "eve/tools";
 import {
   HmacApprovalSigner,
   type AuthenticatedPrincipal,
   type ApprovalSigner,
-} from "@/factory/authorization.ts";
+} from "@/factory/core/authorization.ts";
 import {
   EveNativeExecutor,
   ExecutorSandboxAdapter,
@@ -17,9 +17,9 @@ import {
   GitHubAppAdapter,
   WspaceAdapter,
   WspaceVerificationAdapter,
-} from "@/factory/adapters.ts";
-import { FactoryWorkflow } from "@/factory/workflow.ts";
-import type { Approval } from "@/factory/authorization.ts";
+} from "@/factory/core/adapters.ts";
+import { FactoryWorkflow } from "@/factory/core/workflow.ts";
+import type { Approval } from "@/factory/core/authorization.ts";
 
 export class FactoryRuntime {
   private storeInstance?: WorkflowStore;

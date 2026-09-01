@@ -3,8 +3,8 @@ import {
   classifyIssue,
   createLazyLiveDeps,
   DEFAULT_CLASSIFIER_TOOL_DESCRIPTION,
-} from "../../factory/classifier.ts";
-import { ClassificationInput } from "../../factory/classifier-schema.ts";
+} from "../../factory/classifier/classifier.ts";
+import { ClassificationInput } from "../../factory/classifier/schema.ts";
 
 // classify_issue Eve tool (#37): accepts issue data, returns the #39 strict
 // triple wrapped in an audit record. Model credentials stay in the host

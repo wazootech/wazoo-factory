@@ -6,8 +6,8 @@ import {
   handleIssueWebhook,
   verifyGitHubSignature,
 } from "@/factory/webhook.ts";
-import { formatClassificationAudit } from "@/factory/classifier.ts";
-import type { ClassificationResult } from "@/factory/classifier-schema.ts";
+import { formatClassificationAudit } from "@/factory/classifier/classifier.ts";
+import type { ClassificationResult } from "@/factory/classifier/schema.ts";
 
 const SECRET = "whsec_test_123";
 

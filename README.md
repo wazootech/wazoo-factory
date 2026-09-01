@@ -62,7 +62,7 @@ the same contract suite (`tests/storage_contract_test.ts`).
 
 - `agent/` — Eve agent (instructions, tools, sandbox, channels)
 - `factory/` — typed contracts, authorization, storage, adapters, and workflow
-- `docs/` — hosted architecture and GitHub App operation guides
+- `docs/` — hosted architecture, GitHub App operation guides, and [references](docs/references.md)
 - `tests/` — unit and contract tests
 
 ## Development

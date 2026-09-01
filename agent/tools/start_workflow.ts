@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { ChangeRequest } from "@/factory/contracts.ts";
+import { ChangeRequest } from "@/factory/core/contracts.ts";
 import {
   factoryWorkflow,
   sessionPrincipal,

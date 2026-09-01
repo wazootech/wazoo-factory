@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Classification, IssueCategory } from "./classifier-eval/schema.ts";
+import { Classification, IssueCategory } from "./eval/schema.ts";
 
 // Canonical classifier contract surface for the factory (#37, reconciled to
 // the #39 resolution). The output triple has a single source of truth in the

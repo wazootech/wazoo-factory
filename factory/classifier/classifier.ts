@@ -2,11 +2,11 @@ import {
   Classification,
   ClassificationInput,
   ClassificationResult,
-} from "./classifier-schema.ts";
+} from "./schema.ts";
 import {
   buildClassifierSystemPrompt,
   buildClassifierUserPrompt,
-} from "./classifier-prompt.ts";
+} from "./prompt.ts";
 
 // Classifier core (#37): model call + validation per the #33 resolution
 // (single-shot structured generation, zod-validated, retried on failure,
@@ -204,4 +204,38 @@ export function formatClassificationAudit(
   result: ClassificationResult,
 ): string {
   return JSON.stringify(result);
+}
+
+/** Format a classification result as a readable GitHub issue comment. */
+export function formatClassificationComment(result: ClassificationResult): string {
+  const { category, confidence, rationale } = result.classification;
+  const icon = category === "bug" ? "🐛" : category === "feature" ? "✨" : "📝";
+  const confidenceLabel = confidence >= 0.8 ? "high" : confidence >= 0.5 ? "medium" : "low";
+  return [
+    `> **Issue Classification** ${icon}`,
+    `>`,
+    `> **Category**: ${category.charAt(0).toUpperCase() + category.slice(1)}`,
+    `> **Confidence**: ${confidenceLabel} (${(confidence * 100).toFixed(0)}%)`,
+    `> **Rationale**: ${rationale}`,
+    `>`,
+    `> _Classified by ${result.model} at ${result.classifiedAt}_`,
+  ].join("\n");
+}
+
+/** Map a classification category to a GitHub label name and color. */
+export function classificationLabel(category: string): {
+  label: string;
+  color: string;
+  description: string;
+} {
+  switch (category) {
+    case "bug":
+      return { label: "factory:bug", color: "d73a4a", description: "Classified as a bug by the Wazoo factory" };
+    case "feature":
+      return { label: "factory:feature", color: "a2eeef", description: "Classified as a feature by the Wazoo factory" };
+    case "docs":
+      return { label: "factory:docs", color: "0075ca", description: "Classified as documentation by the Wazoo factory" };
+    default:
+      return { label: "factory:unclassified", color: "ededed", description: "Classification pending" };
+  }
 }

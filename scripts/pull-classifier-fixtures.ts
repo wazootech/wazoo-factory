@@ -2,8 +2,8 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-import { CasesFile, type CaseFile } from "@/factory/classifier-eval/schema.ts";
-import type { GhIssuePayload } from "@/factory/classifier-eval/pull.ts";
+import { CasesFile, type CaseFile } from "@/factory/classifier/eval/schema.ts";
+import type { GhIssuePayload } from "@/factory/classifier/eval/pull.ts";
 
 interface CliOptions {
   manifest: string;
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
   }
 
   const selected = roundRobinSelect(pools, options.total, options.perRepoCap);
-  const { mapIssueToCase } = await import("@/factory/classifier-eval/pull.ts");
+  const { mapIssueToCase } = await import("@/factory/classifier/eval/pull.ts");
   let cases: CaseFile[] = selected.map(({ repository, issue }) =>
     mapIssueToCase({ repository, issue }),
   );

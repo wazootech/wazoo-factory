@@ -18,8 +18,8 @@ import {
   scorePredictions,
   summarizeGate,
   type ScoreInput,
-} from "../factory/classifier-eval/score.ts";
-import { renderReport } from "../factory/classifier-eval/report.ts";
+} from "../factory/classifier/eval/score.ts";
+import { renderReport } from "../factory/classifier/eval/report.ts";
 
 export interface BaselinePrediction {
   id: string;
