@@ -1,6 +1,7 @@
 import { defineChannel, POST } from "eve/channels";
 import {
   classifyIssue,
+  classificationDigest,
   createLazyLiveDeps,
   formatClassificationAudit,
   resolveLiveClassifierEnv,
@@ -9,6 +10,7 @@ import {
   createRouteHandler,
   type WebhookIssueInput,
 } from "@/factory/webhook.ts";
+import { factoryStore } from "@/agent/lib/factory-runtime.ts";
 
 // GitHub webhook channel (#35): issues.opened / issues.reopened deliveries are
 // HMAC-verified (GITHUB_WEBHOOK_SECRET), filtered, answered 202 immediately,
@@ -26,6 +28,18 @@ const liveDeps = createLazyLiveDeps();
 
 async function processIssue(input: WebhookIssueInput): Promise<void> {
   const result = await classifyIssue(liveDeps, input);
+
+  // Persist the classification audit record through the storage layer.
+  // Idempotent: same repository+issueNumber+classifiedAt produces the same digest,
+  // and put() is a no-op if the digest already exists.
+  try {
+    const store = factoryStore();
+    const digest = classificationDigest(result);
+    await store.put(digest, result);
+  } catch {
+    // Store not configured or unavailable; fall back to structured log.
+  }
+
   console.info(`[classification] ${formatClassificationAudit(result)}`);
 }
 

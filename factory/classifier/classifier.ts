@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   Classification,
   ClassificationInput,
@@ -238,4 +239,14 @@ export function classificationLabel(category: string): {
     default:
       return { label: "factory:unclassified", color: "ededed", description: "Classification pending" };
   }
+}
+
+/**
+ * Compute a deterministic digest for a classification result.
+ * Uses repository + issueNumber + classifiedAt as the key,
+ * giving idempotent upsert semantics for GitHub redeliveries.
+ */
+export function classificationDigest(result: ClassificationResult): string {
+  const key = `${result.input.repository}#${result.input.issueNumber}@${result.classifiedAt}`;
+  return createHash("sha256").update(key).digest("hex");
 }
