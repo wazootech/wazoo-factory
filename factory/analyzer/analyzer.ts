@@ -84,3 +84,109 @@ export function createAnalyzeIssueTool(
     execute: (input) => analyzeIssue(deps, input),
   };
 }
+
+export interface LiveAnalyzerOptions {
+  baseURL: string;
+  apiKey: string;
+  model: string;
+  /** Structured-output generation settings; deterministic by default. */
+  temperature?: number;
+  maxRetries?: number;
+}
+
+export const ANALYZER_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
+export const ANALYZER_DEFAULT_MODEL = "anthropic/claude-sonnet-5";
+
+export interface ResolvedLiveAnalyzer {
+  apiKey: string;
+  model: string;
+  baseURL: string;
+}
+
+/** Single env-resolution point shared by the Eve tool and future callers. */
+export function resolveLiveAnalyzerEnv(
+  env: {
+    AI_GATEWAY_API_KEY?: string;
+    OPENCODE_GO_API_KEY?: string;
+    ANALYZER_MODEL?: string;
+    ANALYZER_BASE_URL?: string;
+  } = process.env,
+): ResolvedLiveAnalyzer {
+  const apiKey = env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
+  if (!apiKey) {
+    throw new Error("analyzer requires AI_GATEWAY_API_KEY in the host runtime");
+  }
+  return {
+    apiKey,
+    model: env.ANALYZER_MODEL ?? ANALYZER_DEFAULT_MODEL,
+    baseURL: env.ANALYZER_BASE_URL ?? ANALYZER_DEFAULT_BASE_URL,
+  };
+}
+
+// Live adapter over an OpenAI-compatible gateway using generateText +
+// Output.object(), mirroring the classifier's adapter. Requires credentials
+// at runtime by construction, so it stays out of unit tests.
+export async function createLiveGenerate(
+  options: LiveAnalyzerOptions,
+): Promise<AnalyzeIssueDeps["generate"]> {
+  const { generateText, Output, extractJsonMiddleware, wrapLanguageModel } =
+    await import("ai");
+  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+
+  const provider = createOpenAICompatible({
+    name: "eve-native-analyzer",
+    baseURL: options.baseURL,
+    apiKey: options.apiKey,
+  });
+  const model = wrapLanguageModel({
+    model: provider.chatModel(options.model),
+    middleware: extractJsonMiddleware(),
+  });
+
+  return async ({ system, prompt }) => {
+    const { output } = await generateText({
+      model,
+      system,
+      prompt,
+      temperature: options.temperature ?? 0,
+      maxRetries: options.maxRetries ?? 2,
+      output: Output.object({ schema: AnalysisResult }),
+    });
+    if (!output) {
+      throw new Error("structured output missing from model response");
+    }
+    return output;
+  };
+}
+
+/**
+ * Memoizing live-deps builder shared by the Eve tool and future callers. Env
+ * resolution stays lazy so merely importing consumers never requires
+ * credentials to be present (#67).
+ */
+export function createLazyLiveDeps(): AnalyzeIssueDeps {
+  let generatePromise: Promise<AnalyzeIssueDeps["generate"]> | undefined;
+  let resolved: ResolvedLiveAnalyzer | undefined;
+  const resolve = (): ResolvedLiveAnalyzer => {
+    if (!resolved) resolved = resolveLiveAnalyzerEnv();
+    return resolved;
+  };
+  return {
+    get model() {
+      return resolve().model;
+    },
+    attempts: DEFAULT_ATTEMPTS,
+    delay: (ms) => new Promise((r) => setTimeout(r, ms)),
+    generate: (params) => {
+      const r = resolve();
+      if (!generatePromise) {
+        generatePromise = createLiveGenerate({
+          baseURL: r.baseURL,
+          apiKey: r.apiKey,
+          model: r.model,
+        });
+      }
+      return generatePromise.then((g) => g(params));
+    },
+  };
+}

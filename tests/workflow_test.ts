@@ -318,6 +318,84 @@ describe("FactoryWorkflow", () => {
     expect(specs[0]?.affectedFiles).toBeUndefined();
   });
 
+  it("fills plan affectedFiles from the analysis when the plan omits its own", async () => {
+    const workflow = workflowWith(recordingSandbox([]));
+    await workflow.start(request);
+    const plan = {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    };
+    const merged = { ...plan, affectedFiles: ["src/parser.ts"] };
+    const digest = digestArtifact(merged);
+
+    const planned = await workflow.plan(
+      request.id,
+      plan,
+      [
+        approval(request.id, "approve-plan", digest),
+        approval(request.id, "associate-issues", digest),
+      ],
+      undefined,
+      { affectedFiles: ["src/parser.ts"] },
+    );
+
+    // The merged value is what gets approved, stored, and digested (#67).
+    expect(planned.plan?.affectedFiles).toEqual(["src/parser.ts"]);
+    expect(planned.plan?.artifactDigest).toBe(digest);
+  });
+
+  it("prefers explicit plan affectedFiles over the analysis handoff", async () => {
+    const workflow = workflowWith(recordingSandbox([]));
+    await workflow.start(request);
+    const plan = {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+      affectedFiles: ["src/explicit.ts"],
+    };
+    const digest = digestArtifact(plan);
+
+    const planned = await workflow.plan(
+      request.id,
+      plan,
+      [
+        approval(request.id, "approve-plan", digest),
+        approval(request.id, "associate-issues", digest),
+      ],
+      undefined,
+      { affectedFiles: ["src/parser.ts"] },
+    );
+
+    expect(planned.plan?.affectedFiles).toEqual(["src/explicit.ts"]);
+    expect(planned.plan?.artifactDigest).toBe(digest);
+  });
+
+  it("leaves the plan untouched when neither side names affectedFiles", async () => {
+    const workflow = workflowWith(recordingSandbox([]));
+    await workflow.start(request);
+    const plan = {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    };
+    const digest = digestArtifact(plan);
+
+    const planned = await workflow.plan(request.id, plan, [
+      approval(request.id, "approve-plan", digest),
+      approval(request.id, "associate-issues", digest),
+    ]);
+
+    expect(planned.plan?.affectedFiles).toBeUndefined();
+    expect(planned.plan?.artifactDigest).toBe(digest);
+  });
+
   it("lands a thrown executor error as a failed workflow instead of stranding it", async () => {
     const store = new MemoryWorkflowStore();
     let calls = 0;

@@ -124,6 +124,8 @@ export class FactoryWorkflow {
     plan: Omit<Plan, "artifactDigest">,
     approvals: (Approval | string)[],
     idempotencyKey = `plan:${plan.id}`,
+    /** #67 handoff: analyzer-derived files the change is expected to touch. */
+    analysis?: { affectedFiles: string[] },
   ) {
     const workflow = await this.require(workflowId);
     if (workflow.idempotency[idempotencyKey]) return workflow;
@@ -131,8 +133,16 @@ export class FactoryWorkflow {
       workflow.request.repository.repository,
       workflow.request.summary,
     );
+    // Mirror implement()'s fallback semantics: a plan that names its own
+    // affectedFiles wins; otherwise the analyzer's file list fills the gap so
+    // the executor always gets repo context through plan() → implement(). The
+    // merged value is what gets approved, stored, and digested.
+    const analysisFiles = plan.affectedFiles?.length
+      ? plan.affectedFiles
+      : analysis?.affectedFiles.slice(0, 100);
     const value = {
       ...plan,
+      ...(analysisFiles?.length ? { affectedFiles: analysisFiles } : {}),
       candidateIssues: plan.candidateIssues.length
         ? plan.candidateIssues
         : candidate,
