@@ -1,6 +1,13 @@
 import { createSign } from "node:crypto";
 import { execFile } from "node:child_process";
+import { posix } from "node:path";
 import { promisify } from "node:util";
+import { z } from "zod";
+import { buildImplementerSystemPrompt } from "../implementer/prompt.ts";
+import {
+  ImplementationOutput,
+  type CheckResult,
+} from "../implementer/schema.ts";
 import type {
   DraftPullRequest,
   IssueAssociation,
@@ -18,6 +25,7 @@ export interface ExecutionResult {
   success: boolean;
   filesChanged: string[];
   checksRun: Array<{ name: string; exitCode: number; output?: string }>;
+  summary?: string;
   interrupted?: boolean;
   resumed?: boolean;
 }
@@ -442,9 +450,179 @@ export interface SandboxHandle {
   writeTextFile(options: { path: string; content: string }): PromiseLike<void>;
 }
 
+export interface CheckCommand {
+  name: string;
+  command: string;
+}
+
+/** Deterministic post-implementation checks (#68): format, typecheck, test. */
+export const DEFAULT_EXECUTOR_CHECKS: readonly CheckCommand[] = [
+  { name: "format", command: "pnpm format:check" },
+  { name: "typecheck", command: "pnpm typecheck" },
+  { name: "test", command: "pnpm test" },
+];
+
+export const DEFAULT_EXECUTOR_MODEL = "anthropic/claude-sonnet-5";
+export const EXECUTOR_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
+export const DEFAULT_EXECUTOR_ATTEMPTS = 3;
+/** #68: exactly one repair attempt after failed checks; never more. */
+export const DEFAULT_EXECUTOR_REPAIRS = 1;
+const EXECUTOR_BACKOFF_MS: readonly number[] = [250, 1000];
+/** ImplementationOutput caps each check's output at 20k; keep entries honest. */
+const MAX_CHECK_OUTPUT = 20_000;
+/** Repair prompts echo failing output; cap each snippet so prompts stay bounded. */
+const REPAIR_OUTPUT_SNIPPET = 4_000;
+
+/**
+ * Model-generated edit batch for the Eve-native executor: full-file writes
+ * inside the worktree. This is the executor's own model protocol, distinct
+ * from the implementer agent's public contract in factory/implementer/schema.ts.
+ */
+const ExecutorEdit = z.object({
+  path: z.string().min(1).max(500),
+  content: z.string().max(200_000),
+});
+const ExecutorEditBatch = z.object({
+  files: z.array(ExecutorEdit).max(200),
+  summary: z.string().max(2_000).optional(),
+});
+
+/** Structured-generation seam; unit tests inject fakes (#68). */
+export type ModelGenerate = (params: {
+  system: string;
+  prompt: string;
+}) => Promise<unknown>;
+
 export interface EveNativeOptions {
   sandbox: SandboxHandle;
+  /** AI gateway key used only by the default live generate seam. */
   apiKey?: string;
+  /** Structured-generation seam; defaults to a live gateway call. */
+  generate?: ModelGenerate;
+  /** Model for the default live seam; defaults to FACTORY_EXECUTOR_MODEL. */
+  model?: string;
+  /** Deterministic post-implementation checks; defaults to format/typecheck/test. */
+  checks?: readonly CheckCommand[];
+  /** Structured-generation retry budget. */
+  attempts?: number;
+  /** Injected backoff wait so unit tests never sleep for real. */
+  delay?: (ms: number) => Promise<void>;
+}
+
+export function resolveExecutorModel(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.FACTORY_EXECUTOR_MODEL ?? DEFAULT_EXECUTOR_MODEL;
+}
+
+/** Live gateway-backed generate seam, mirroring the classifier's adapter. */
+export async function createLiveExecutorGenerate(options: {
+  baseURL?: string;
+  apiKey: string;
+  model: string;
+}): Promise<ModelGenerate> {
+  const { generateText, Output, extractJsonMiddleware, wrapLanguageModel } =
+    await import("ai");
+  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+
+  const provider = createOpenAICompatible({
+    name: "eve-native-executor",
+    baseURL: options.baseURL ?? EXECUTOR_DEFAULT_BASE_URL,
+    apiKey: options.apiKey,
+  });
+  const model = wrapLanguageModel({
+    model: provider.chatModel(options.model),
+    middleware: extractJsonMiddleware(),
+  });
+
+  return async ({ system, prompt }) => {
+    const { output } = await generateText({
+      model,
+      system,
+      prompt,
+      temperature: 0,
+      maxRetries: 2,
+      output: Output.object({ schema: ExecutorEditBatch }),
+    });
+    if (!output) {
+      throw new Error("structured output missing from model response");
+    }
+    return output;
+  };
+}
+
+const DEFAULT_TASK_PERMISSIONS = { shell: true, read: true, write: true };
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\''`)}'`;
+}
+
+function truncateOutput(output: string, max: number): string {
+  return output.length <= max ? output : output.slice(-max);
+}
+
+/**
+ * Resolve a model-supplied edit path inside the worktree. Sandbox paths are
+ * POSIX (Vercel sandbox); absolute paths and traversal are rejected.
+ */
+function worktreeFile(workspacePath: string, candidate: string): string {
+  const relative = candidate.startsWith("./") ? candidate.slice(2) : candidate;
+  if (
+    !relative ||
+    posix.isAbsolute(relative) ||
+    relative.split(/[\\/]/).includes("..")
+  ) {
+    throw new Error(`edit path escapes the workspace: ${candidate}`);
+  }
+  const root = posix.resolve(workspacePath);
+  const absolute = posix.resolve(root, relative);
+  if (absolute !== root && !absolute.startsWith(`${root}/`)) {
+    throw new Error(`edit path escapes the workspace: ${candidate}`);
+  }
+  return absolute;
+}
+
+const EDIT_BATCH_INSTRUCTIONS = `Return the complete change as JSON with a "files" array and a "summary" string:
+{"files":[{"path":"<relative path>","content":"<full new file contents>"}],"summary":"<one-line description>"}
+
+- "path" is relative to the working directory. Never use absolute paths or "..".
+- "content" holds the COMPLETE new contents of that file.
+- Only change files the specification requires; do not reformat unrelated code.
+- "summary" briefly describes the change.`;
+
+/** Prompt for executor model calls; the repair phase names failing checks. */
+function buildExecutorEditPrompt(
+  spec: TaskSpec,
+  workspacePath: string,
+  failingChecks: readonly CheckResult[],
+): string {
+  const sections: string[] = [];
+  sections.push("## Task");
+  sections.push(`ID: ${spec.id}`);
+  const model = spec.modelContext?.model;
+  if (typeof model === "string") {
+    sections.push("\n## Model");
+    sections.push(`Using: ${model}`);
+  }
+  sections.push("\n## Specification");
+  sections.push(spec.prompt);
+  sections.push("\n## Working directory");
+  sections.push(workspacePath);
+  if (failingChecks.length > 0) {
+    sections.push("\n## Previous attempt failed checks");
+    for (const check of failingChecks) {
+      sections.push(`### ${check.name} (exit code ${check.exitCode})`);
+      sections.push(truncateOutput(check.output ?? "", REPAIR_OUTPUT_SNIPPET));
+    }
+    sections.push("\n## Repair");
+    sections.push(
+      `Fix every failing check above. Keep the change minimal. ${EDIT_BATCH_INSTRUCTIONS}`,
+    );
+  } else {
+    sections.push("\n## Deliverable");
+    sections.push(EDIT_BATCH_INSTRUCTIONS);
+  }
+  return sections.join("\n");
 }
 
 export class EveNativeExecutor implements Executor {
@@ -452,13 +630,201 @@ export class EveNativeExecutor implements Executor {
 
   constructor(private readonly options: EveNativeOptions) {}
 
-  async run(spec: TaskSpec, _workspacePath: string): Promise<ExecutionResult> {
-    return {
-      success: true,
-      filesChanged: [],
-      checksRun: [],
+  private liveGenerate?: Promise<ModelGenerate>;
+
+  private generate(): Promise<ModelGenerate> {
+    if (this.options.generate) return Promise.resolve(this.options.generate);
+    this.liveGenerate ??= this.buildLiveGenerate();
+    return this.liveGenerate;
+  }
+
+  private async buildLiveGenerate(): Promise<ModelGenerate> {
+    const apiKey = this.options.apiKey;
+    if (!apiKey) {
+      throw new Error(
+        "eve-native executor requires AI_GATEWAY_API_KEY in the host runtime",
+      );
+    }
+    return createLiveExecutorGenerate({
+      apiKey,
+      model: this.options.model ?? resolveExecutorModel(),
+    });
+  }
+
+  async run(spec: TaskSpec, workspacePath: string): Promise<ExecutionResult> {
+    if (!spec.prompt || !spec.prompt.trim()) {
+      throw new Error("EveNativeExecutor requires a non-empty task prompt");
+    }
+    // Bounded execution (#68): refuse tasks the granted permissions cannot
+    // perform. A write-less task cannot apply edits and a shell-less task
+    // cannot run the deterministic checks the contract requires.
+    const permissions = spec.permissions ?? DEFAULT_TASK_PERMISSIONS;
+    if (!permissions.write) {
+      throw new Error(
+        "EveNativeExecutor requires write permission to implement the task",
+      );
+    }
+    if (!permissions.shell) {
+      throw new Error(
+        "EveNativeExecutor requires shell permission to run checks",
+      );
+    }
+
+    const checks = this.options.checks ?? DEFAULT_EXECUTOR_CHECKS;
+    const attempts = this.options.attempts ?? DEFAULT_EXECUTOR_ATTEMPTS;
+    const generate = await this.generate();
+    const filesChanged: string[] = [];
+    const checksRun: CheckResult[] = [];
+
+    // Phase 1: the model produces an edit batch; apply it in the sandbox.
+    const implement = await this.requestEdits(
+      generate,
+      spec,
+      workspacePath,
+      [],
+      attempts,
+    );
+    await this.applyBatch(implement.files, workspacePath, filesChanged);
+    let summary = implement.summary;
+    let passed = await this.runChecks(checks, workspacePath, checksRun);
+
+    // Phase 2: exactly one repair attempt per #68 when checks fail.
+    let repairs = 0;
+    while (!passed && repairs < DEFAULT_EXECUTOR_REPAIRS) {
+      repairs += 1;
+      const failing = checksRun
+        .slice(-checks.length)
+        .filter((check) => check.exitCode !== 0);
+      const repair = await this.requestEdits(
+        generate,
+        spec,
+        workspacePath,
+        failing,
+        attempts,
+      );
+      await this.applyBatch(repair.files, workspacePath, filesChanged);
+      if (repair.summary) summary = repair.summary;
+      passed = await this.runChecks(checks, workspacePath, checksRun);
+    }
+
+    if (passed) {
+      summary ??=
+        `Implemented ${filesChanged.length} file(s); ` +
+        `${checks.length} check(s) passed.`;
+    } else {
+      const failing = checksRun
+        .slice(-checks.length)
+        .filter((check) => check.exitCode !== 0)
+        .map((check) => `${check.name} (exit code ${check.exitCode})`)
+        .join(", ");
+      summary = `Implementation failed after ${repairs + 1} attempt(s): ${failing}`;
+    }
+
+    // #68: ImplementationOutput must validate against the real run results.
+    return ImplementationOutput.parse({
+      success: passed,
+      filesChanged,
+      checksRun,
+      summary,
       interrupted: false,
       resumed: false,
-    };
+    });
+  }
+
+  private async requestEdits(
+    generate: ModelGenerate,
+    spec: TaskSpec,
+    workspacePath: string,
+    failingChecks: readonly CheckResult[],
+    attempts: number,
+  ): Promise<z.infer<typeof ExecutorEditBatch>> {
+    const system = buildImplementerSystemPrompt();
+    const prompt = buildExecutorEditPrompt(spec, workspacePath, failingChecks);
+    let lastError = "";
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const payload = await generate({ system, prompt });
+        return ExecutorEditBatch.parse(payload);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        if (attempt < attempts) await this.backoff(attempt);
+      }
+    }
+    throw new Error(
+      `implementer model call failed after ${attempts} attempts; last error: ${lastError}`,
+    );
+  }
+
+  private async applyBatch(
+    edits: readonly { path: string; content: string }[],
+    workspacePath: string,
+    filesChanged: string[],
+  ) {
+    for (const edit of edits) {
+      const absolute = worktreeFile(workspacePath, edit.path);
+      await this.options.sandbox.writeTextFile({
+        path: absolute,
+        content: edit.content,
+      });
+      const relative = edit.path.startsWith("./")
+        ? edit.path.slice(2)
+        : edit.path;
+      if (!filesChanged.includes(relative)) filesChanged.push(relative);
+    }
+  }
+
+  private async runChecks(
+    checks: readonly CheckCommand[],
+    workspacePath: string,
+    sink: CheckResult[],
+  ): Promise<boolean> {
+    let passed = true;
+    for (const check of checks) {
+      const { exitCode, output } = await this.runInWorkspace(
+        check.command,
+        workspacePath,
+      );
+      sink.push({
+        name: check.name,
+        exitCode,
+        output: truncateOutput(output, MAX_CHECK_OUTPUT),
+      });
+      if (exitCode !== 0) passed = false;
+    }
+    return passed;
+  }
+
+  private async runInWorkspace(command: string, workspacePath: string) {
+    const full = `cd ${shellQuote(workspacePath)} && ${command}`;
+    try {
+      const result = await this.options.sandbox.run({ command: full });
+      return {
+        // Backends that return a code expose it; a missing code means success.
+        exitCode: typeof result?.exitCode === "number" ? result.exitCode : 0,
+        output: [result?.stdout, result?.stderr].filter(Boolean).join("\n"),
+      };
+    } catch (error) {
+      // Backends that reject on non-zero exit; parse the code like execFile.
+      const e = error as {
+        code?: number;
+        stdout?: string;
+        stderr?: string;
+        message?: string;
+      };
+      return {
+        exitCode: typeof e.code === "number" ? e.code : 1,
+        output: [e.stdout, e.stderr, e.message].filter(Boolean).join("\n"),
+      };
+    }
+  }
+
+  private backoff(attempt: number): Promise<void> {
+    const wait =
+      EXECUTOR_BACKOFF_MS[attempt - 1] ??
+      EXECUTOR_BACKOFF_MS[EXECUTOR_BACKOFF_MS.length - 1] ??
+      0;
+    return this.options.delay
+      ? this.options.delay(wait)
+      : new Promise((resolve) => setTimeout(resolve, wait));
   }
 }
