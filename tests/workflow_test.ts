@@ -317,4 +317,66 @@ describe("FactoryWorkflow", () => {
 
     expect(specs[0]?.affectedFiles).toBeUndefined();
   });
+
+  it("lands a thrown executor error as a failed workflow instead of stranding it", async () => {
+    const store = new MemoryWorkflowStore();
+    let calls = 0;
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      {
+        async implement() {
+          calls += 1;
+          throw new Error("model call exhausted after 3 attempts");
+        },
+      },
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    const approvalIds = [approval(request.id, "mutate-repository", planDigest)];
+
+    // The original error still propagates to the caller.
+    await expect(
+      workflow.implement(
+        request.id,
+        { id: "implementation-1", prompt: "Implement the tracer" },
+        approvalIds,
+      ),
+    ).rejects.toThrow("model call exhausted after 3 attempts");
+
+    // But the workflow is persisted as failed with a structured error record,
+    // a workflow.failed audit, and no stranded `implementing` stage.
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.implementation?.success).toBe(false);
+    expect(failed?.implementation?.checks).toEqual([]);
+    expect(failed?.implementation?.error?.message).toContain(
+      "model call exhausted",
+    );
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(true);
+
+    // A re-invoke with the same idempotency key returns the failed workflow
+    // without re-executing or throwing `Invalid transition`.
+    const replay = await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      approvalIds,
+    );
+    expect(replay.stage).toBe("failed");
+    expect(calls).toBe(1);
+  });
 });

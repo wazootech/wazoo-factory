@@ -459,7 +459,11 @@ export interface CheckCommand {
   command: string;
 }
 
-/** Deterministic post-implementation checks (#68): format, typecheck, test. */
+/**
+ * Deterministic post-implementation checks (#68): format, typecheck, test.
+ * pnpm-specific by default; override per executor via `checks` for repos that
+ * use another package manager or gate (#70 review, doc note).
+ */
 export const DEFAULT_EXECUTOR_CHECKS: readonly CheckCommand[] = [
   { name: "format", command: "pnpm format:check" },
   { name: "typecheck", command: "pnpm typecheck" },
@@ -473,6 +477,12 @@ export const DEFAULT_EXECUTOR_ATTEMPTS = 3;
 export const DEFAULT_EXECUTOR_REPAIRS = 1;
 /** Host-side bound per sandbox command; conventionally 124 on timeout. */
 export const DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS = 300_000;
+/**
+ * Per-phase budget (#70 review): caps the total check time of one implement
+ * or repair phase so a hung suite reports failure in bounded time instead of
+ * commandTimeoutMs * checks.length per phase.
+ */
+export const DEFAULT_EXECUTOR_PHASE_TIMEOUT_MS = 600_000;
 const EXECUTOR_BACKOFF_MS: readonly number[] = [250, 1000];
 /** ImplementationOutput caps each check's output at 20k; keep entries honest. */
 const MAX_CHECK_OUTPUT = 20_000;
@@ -518,6 +528,8 @@ export interface EveNativeOptions {
   delay?: (ms: number) => Promise<void>;
   /** Host-side bound per sandbox command; defaults to DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS. */
   commandTimeoutMs?: number;
+  /** Per-phase deadline shared across a phase's checks; defaults to DEFAULT_EXECUTOR_PHASE_TIMEOUT_MS. */
+  phaseTimeoutMs?: number;
 }
 
 export function resolveExecutorModel(
@@ -738,6 +750,10 @@ export class EveNativeExecutor implements Executor {
 
     const checks = this.options.checks ?? DEFAULT_EXECUTOR_CHECKS;
     const attempts = this.options.attempts ?? DEFAULT_EXECUTOR_ATTEMPTS;
+    const commandTimeoutMs =
+      this.options.commandTimeoutMs ?? DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS;
+    const phaseTimeoutMs =
+      this.options.phaseTimeoutMs ?? DEFAULT_EXECUTOR_PHASE_TIMEOUT_MS;
     const generate = await this.generate();
     const filesChanged: string[] = [];
     const checksRun: CheckResult[] = [];
@@ -752,7 +768,13 @@ export class EveNativeExecutor implements Executor {
     );
     await this.applyBatch(implement.files, workspacePath, filesChanged);
     let summary = implement.summary;
-    let passed = await this.runChecks(checks, workspacePath, checksRun);
+    let passed = await this.runChecks(
+      checks,
+      workspacePath,
+      checksRun,
+      commandTimeoutMs,
+      Date.now() + phaseTimeoutMs,
+    );
 
     // Phase 2: exactly one repair attempt per #68 when checks fail.
     let repairs = 0;
@@ -770,7 +792,14 @@ export class EveNativeExecutor implements Executor {
       );
       await this.applyBatch(repair.files, workspacePath, filesChanged);
       if (repair.summary) summary = repair.summary;
-      passed = await this.runChecks(checks, workspacePath, checksRun);
+      // Each repair attempt gets its own phase budget.
+      passed = await this.runChecks(
+        checks,
+        workspacePath,
+        checksRun,
+        commandTimeoutMs,
+        Date.now() + phaseTimeoutMs,
+      );
     }
 
     if (passed) {
@@ -857,8 +886,15 @@ export class EveNativeExecutor implements Executor {
     workspacePath: string,
     filesChanged: string[],
   ) {
-    for (const edit of edits) {
-      const absolute = worktreeFile(workspacePath, edit.path);
+    // Resolve every path before the first write (#70 review): a mid-batch
+    // escape must not leave earlier edits applied and the run half-aborted.
+    // The per-edit worktreeFile guard stays as defense in depth; this pre-pass
+    // makes the whole batch atomic in effect.
+    const resolved = edits.map((edit) => ({
+      edit,
+      absolute: worktreeFile(workspacePath, edit.path),
+    }));
+    for (const { edit, absolute } of resolved) {
       await this.options.sandbox.writeTextFile({
         path: absolute,
         content: edit.content,
@@ -874,13 +910,26 @@ export class EveNativeExecutor implements Executor {
     checks: readonly CheckCommand[],
     workspacePath: string,
     sink: CheckResult[],
+    commandTimeoutMs: number,
+    phaseDeadline: number,
   ): Promise<boolean> {
     let passed = true;
     for (const check of checks) {
-      const { exitCode, output } = await this.runInWorkspace(
-        check.command,
-        workspacePath,
-      );
+      const remaining = phaseDeadline - Date.now();
+      let exitCode: number;
+      let output: string;
+      if (remaining <= 0) {
+        // Phase budget exhausted (#70 review): a check that cannot start
+        // before the deadline is itself a failure, conventionally 124.
+        exitCode = 124;
+        output = `${check.command} skipped: phase budget exhausted`;
+      } else {
+        ({ exitCode, output } = await this.runInWorkspace(
+          check.command,
+          workspacePath,
+          Math.min(commandTimeoutMs, remaining),
+        ));
+      }
       sink.push({
         name: check.name,
         exitCode,
@@ -891,21 +940,26 @@ export class EveNativeExecutor implements Executor {
     return passed;
   }
 
-  private async runInWorkspace(command: string, workspacePath: string) {
+  private async runInWorkspace(
+    command: string,
+    workspacePath: string,
+    timeoutMs: number,
+  ) {
     const full = `cd ${shellQuote(workspacePath)} && ${command}`;
-    const timeoutMs =
-      this.options.commandTimeoutMs ?? DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS;
     try {
       // Pass the timeout through to backends that can cancel server-side;
       // the host-side race below still guarantees a bounded wait either way.
       const result = await withTimeout(
         this.options.sandbox.run({ command: full, timeoutMs }),
         timeoutMs,
-        full,
+        // The label lands in check output on timeout; keep it to the check
+        // command so the worktree path never leaks into artifacts (#70 review).
+        command,
       );
       return {
-        // Backends that return a code expose it; a missing code means success.
-        exitCode: typeof result?.exitCode === "number" ? result.exitCode : 0,
+        // Backends that return a code expose it; a missing code is treated
+        // conservatively as a failure rather than success (#70 review).
+        exitCode: typeof result?.exitCode === "number" ? result.exitCode : 1,
         output: [result?.stdout, result?.stderr].filter(Boolean).join("\n"),
       };
     } catch (error) {

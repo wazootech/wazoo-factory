@@ -77,6 +77,7 @@ function makeExecutor(
     attempts?: number;
     delay?: (ms: number) => Promise<void>;
     commandTimeoutMs?: number;
+    phaseTimeoutMs?: number;
   } = {},
 ) {
   return new EveNativeExecutor({
@@ -86,6 +87,7 @@ function makeExecutor(
     attempts: options.attempts,
     delay: options.delay ?? (async () => {}),
     commandTimeoutMs: options.commandTimeoutMs,
+    phaseTimeoutMs: options.phaseTimeoutMs,
   });
 }
 
@@ -433,6 +435,73 @@ describe("EveNativeExecutor (#68)", () => {
     expect(
       result.checksRun.every((check) =>
         check.output?.includes("timed out after 50ms"),
+      ),
+    ).toBe(true);
+    // Timeout messages carry the check command but never the worktree path
+    // (#70 review): artifacts must not leak the sandbox location.
+    expect(
+      result.checksRun.every((check) => !check.output?.includes(workspacePath)),
+    ).toBe(true);
+    expectValid(result);
+  });
+
+  it("bounds each phase's check time with the per-phase budget", async () => {
+    const { sandbox } = makeSandbox(() => new Promise(() => {}));
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate, {
+      commandTimeoutMs: 60_000, // larger than the phase budget
+      phaseTimeoutMs: 120,
+    });
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    expect(result.success).toBe(false);
+    // The first check of each phase hangs until the phase budget expires
+    // (124); the rest of that phase cannot start and report as exhausted
+    // (also 124). Exactly one repair is attempted, each with its own budget.
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(result.checksRun).toHaveLength(6);
+    expect(result.checksRun.every((check) => check.exitCode === 124)).toBe(
+      true,
+    );
+    expectValid(result);
+  });
+
+  it("validates every edit path before applying any write in a batch", async () => {
+    const { sandbox, writes } = makeSandbox();
+    const generate = vi.fn(async () => ({
+      files: [
+        { path: "src/ok.ts", content: "fine" },
+        { path: "../escape.ts", content: "pwned" },
+      ],
+      summary: "mixed batch",
+    }));
+    const executor = makeExecutor(sandbox, generate);
+
+    await expect(executor.run(baseTask, workspacePath)).rejects.toThrow(
+      /edit path escapes the workspace/,
+    );
+    // No partial application: the batch is resolved atomically, so the valid
+    // edit never lands when a sibling path escapes.
+    expect(writes).toHaveLength(0);
+    expect(sandbox.run).not.toHaveBeenCalled();
+  });
+
+  it("treats a returned run without an exit code as a failed check", async () => {
+    const { sandbox } = makeSandbox(
+      () => ({ stdout: "partial output" }) as unknown as RunResult,
+    );
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate);
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    // Missing exit code is conservative failure (1), not success (#70 review).
+    expect(result.success).toBe(false);
+    expect(result.checksRun.every((check) => check.exitCode === 1)).toBe(true);
+    expect(
+      result.checksRun.every((check) =>
+        check.output?.includes("partial output"),
       ),
     ).toBe(true);
     expectValid(result);
