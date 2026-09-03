@@ -574,6 +574,9 @@ export async function createLiveExecutorGenerate(options: {
   };
 }
 
+// #70 review note: a TaskSpec that omits `permissions` is treated as a full
+// grant, because the executor cannot operate without write + shell anyway.
+// Callers that want narrower bounds must declare them explicitly.
 const DEFAULT_TASK_PERMISSIONS = { shell: true, read: true, write: true };
 
 function shellQuote(value: string): string {
@@ -613,7 +616,10 @@ function withTimeout<T>(
 
 /**
  * Resolve a model-supplied edit path inside the worktree. Sandbox paths are
- * POSIX (Vercel sandbox); absolute paths and traversal are rejected.
+ * POSIX (Vercel sandbox); absolute paths and traversal are rejected. Note
+ * containment is lexical only (no symlink resolution): a pre-existing
+ * symlink inside the worktree pointing outside is the sandbox backend's
+ * boundary to enforce, not this guard's (#70 review, doc note).
  */
 function worktreeFile(workspacePath: string, candidate: string): string {
   const relative = candidate.startsWith("./") ? candidate.slice(2) : candidate;
@@ -632,6 +638,11 @@ function worktreeFile(workspacePath: string, candidate: string): string {
   return absolute;
 }
 
+// #70 review notes: the edit protocol shares the model message with
+// untrusted content (spec + existing file contents); the sandbox is the real
+// trust boundary since checks execute model-written code. New-file creation
+// assumes the parent directory exists in the sandbox (no mkdir in the
+// SandboxHandle contract) — revisit with the Eve sandbox backend (#69).
 const EDIT_BATCH_INSTRUCTIONS = `Return the complete change as JSON with a "files" array and a "summary" string:
 {"files":[{"path":"<relative path>","content":"<full new file contents>"}],"summary":"<one-line description>"}
 
