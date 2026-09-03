@@ -19,6 +19,8 @@ export interface TaskSpec {
   prompt: string;
   modelContext?: Record<string, unknown>;
   permissions?: { shell: boolean; read: boolean; write: boolean };
+  /** Repo-relative paths whose current contents are fed to the model. */
+  affectedFiles?: string[];
 }
 
 export interface ExecutionResult {
@@ -472,6 +474,9 @@ const EXECUTOR_BACKOFF_MS: readonly number[] = [250, 1000];
 const MAX_CHECK_OUTPUT = 20_000;
 /** Repair prompts echo failing output; cap each snippet so prompts stay bounded. */
 const REPAIR_OUTPUT_SNIPPET = 4_000;
+/** Existing-file context fed to the model; cap per file and in total. */
+const MAX_FILE_CONTEXT_PER_FILE = 20_000;
+const MAX_FILE_CONTEXT_TOTAL = 200_000;
 
 /**
  * Model-generated edit batch for the Eve-native executor: full-file writes
@@ -587,14 +592,20 @@ const EDIT_BATCH_INSTRUCTIONS = `Return the complete change as JSON with a "file
 
 - "path" is relative to the working directory. Never use absolute paths or "..".
 - "content" holds the COMPLETE new contents of that file.
+- Base your edits on the "Existing files" section above: preserve any parts you are not changing. A file marked not found may be created new.
 - Only change files the specification requires; do not reformat unrelated code.
 - "summary" briefly describes the change.`;
 
-/** Prompt for executor model calls; the repair phase names failing checks. */
+/**
+ * Prompt for executor model calls. The implement phase carries the spec; the
+ * repair phase additionally names failing checks; existing affected files are
+ * always included when read permission allows.
+ */
 function buildExecutorEditPrompt(
   spec: TaskSpec,
   workspacePath: string,
   failingChecks: readonly CheckResult[],
+  existingFiles: ReadonlyArray<{ path: string; content: string | null }>,
 ): string {
   const sections: string[] = [];
   sections.push("## Task");
@@ -608,6 +619,28 @@ function buildExecutorEditPrompt(
   sections.push(spec.prompt);
   sections.push("\n## Working directory");
   sections.push(workspacePath);
+  if (existingFiles.length > 0) {
+    sections.push("\n## Existing files");
+    sections.push(
+      "Current contents of the files this task may change. Use them as the base for your edits.",
+    );
+    let total = 0;
+    for (const file of existingFiles) {
+      if (total >= MAX_FILE_CONTEXT_TOTAL) {
+        sections.push("…remaining files omitted (context limit)");
+        break;
+      }
+      sections.push(`### ${file.path}`);
+      if (file.content === null) {
+        sections.push("<file not found in the worktree>");
+        total += 40;
+      } else {
+        const snippet = truncateOutput(file.content, MAX_FILE_CONTEXT_PER_FILE);
+        sections.push(snippet);
+        total += snippet.length;
+      }
+    }
+  }
   if (failingChecks.length > 0) {
     sections.push("\n## Previous attempt failed checks");
     for (const check of failingChecks) {
@@ -738,8 +771,22 @@ export class EveNativeExecutor implements Executor {
     failingChecks: readonly CheckResult[],
     attempts: number,
   ): Promise<z.infer<typeof ExecutorEditBatch>> {
+    // Read current contents of affected files fresh for every model call so
+    // the repair phase sees the post-edit state (reads are cheap in the
+    // sandbox). Missing files are surfaced to the model as not-found.
+    const readGranted = spec.permissions?.read ?? true;
+    const existingFiles = await this.readAffectedFiles(
+      spec.affectedFiles,
+      workspacePath,
+      readGranted,
+    );
     const system = buildImplementerSystemPrompt();
-    const prompt = buildExecutorEditPrompt(spec, workspacePath, failingChecks);
+    const prompt = buildExecutorEditPrompt(
+      spec,
+      workspacePath,
+      failingChecks,
+      existingFiles,
+    );
     let lastError = "";
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
@@ -753,6 +800,23 @@ export class EveNativeExecutor implements Executor {
     throw new Error(
       `implementer model call failed after ${attempts} attempts; last error: ${lastError}`,
     );
+  }
+
+  private async readAffectedFiles(
+    affectedFiles: string[] | undefined,
+    workspacePath: string,
+    readGranted: boolean,
+  ): Promise<Array<{ path: string; content: string | null }>> {
+    if (!affectedFiles?.length || !readGranted) return [];
+    const files: Array<{ path: string; content: string | null }> = [];
+    for (const file of affectedFiles) {
+      const absolute = worktreeFile(workspacePath, file);
+      const content = await this.options.sandbox.readTextFile({
+        path: absolute,
+      });
+      files.push({ path: file, content });
+    }
+    return files;
   }
 
   private async applyBatch(

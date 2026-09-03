@@ -35,6 +35,7 @@ function makeSandbox(
     command: string,
     writes: Array<{ path: string; content: string }>,
   ) => RunResult | Promise<RunResult>,
+  readHandler?: (path: string) => string | null | Promise<string | null>,
 ) {
   const commands: string[] = [];
   const writes: Array<{ path: string; content: string }> = [];
@@ -47,14 +48,16 @@ function makeSandbox(
       stderr: result.stderr ?? "",
     };
   });
-  const readTextFile = vi.fn(async () => null);
+  const readTextFile = vi.fn(async ({ path }: { path: string }) =>
+    readHandler ? await readHandler(path) : null,
+  );
   const writeTextFile = vi.fn(
     async ({ path, content }: { path: string; content: string }) => {
       writes.push({ path, content });
     },
   );
   const sandbox: SandboxHandle = { run, readTextFile, writeTextFile };
-  return { sandbox, commands, writes };
+  return { sandbox, commands, writes, readTextFile };
 }
 
 type Generate = (params: {
@@ -108,6 +111,8 @@ describe("EveNativeExecutor (#68)", () => {
     expect(result.checksRun.every((check) => check.exitCode === 0)).toBe(true);
     expect(generate).toHaveBeenCalledTimes(1);
     expectValid(result);
+    // No affected files were requested, so nothing is read from the sandbox.
+    expect(sandbox.readTextFile).not.toHaveBeenCalled();
 
     // Edits land at the worktree path via the sandbox handle.
     expect(sandbox.writeTextFile).toHaveBeenCalledWith({
@@ -322,6 +327,82 @@ describe("EveNativeExecutor (#68)", () => {
       /edit path escapes the workspace/,
     );
     expect(absolute.writes).toHaveLength(0);
+  });
+
+  it("feeds existing affected file contents into the model prompt before edits", async () => {
+    const { sandbox, readTextFile } = makeSandbox(undefined, (path) =>
+      path.endsWith("src/tracer.ts")
+        ? "export const trace = (frame: unknown) => frame;\n"
+        : null,
+    );
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate);
+
+    const result = await executor.run(
+      {
+        ...baseTask,
+        affectedFiles: ["src/tracer.ts", "src/missing.ts"],
+      },
+      workspacePath,
+    );
+
+    expect(result.success).toBe(true);
+    // Reads happen before the model call, inside the worktree.
+    expect(readTextFile).toHaveBeenCalledWith({
+      path: "/workspace/wf-1/src/tracer.ts",
+    });
+    expect(readTextFile).toHaveBeenCalledWith({
+      path: "/workspace/wf-1/src/missing.ts",
+    });
+    const call = generate.mock.calls[0]![0];
+    expect(call.prompt).toContain("## Existing files");
+    expect(call.prompt).toContain("### src/tracer.ts");
+    expect(call.prompt).toContain(
+      "export const trace = (frame: unknown) => frame;",
+    );
+    expect(call.prompt).toContain("### src/missing.ts");
+    expect(call.prompt).toContain("<file not found in the worktree>");
+    expect(call.prompt).toContain(
+      'Base your edits on the "Existing files" section above',
+    );
+  });
+
+  it("omits file context when read permission is denied", async () => {
+    const { sandbox, readTextFile } = makeSandbox();
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate);
+
+    const result = await executor.run(
+      {
+        ...baseTask,
+        permissions: { shell: true, read: false, write: true },
+        affectedFiles: ["src/tracer.ts"],
+      },
+      workspacePath,
+    );
+
+    expect(result.success).toBe(true);
+    expect(readTextFile).not.toHaveBeenCalled();
+    const call = generate.mock.calls[0]![0];
+    expect(call.prompt).not.toContain("## Existing files");
+  });
+
+  it("truncates long existing file contents to the prompt cap", async () => {
+    const { sandbox } = makeSandbox(
+      undefined,
+      () => "A".repeat(25_000) + "B".repeat(5_000),
+    );
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate);
+
+    await executor.run(
+      { ...baseTask, affectedFiles: ["src/big.ts"] },
+      workspacePath,
+    );
+
+    const call = generate.mock.calls[0]![0];
+    expect(call.prompt).toContain("B".repeat(5_000)); // tail preserved
+    expect(call.prompt).not.toContain("A".repeat(25_000)); // head dropped
   });
 
   it("truncates long check output to the ImplementationOutput cap", async () => {
