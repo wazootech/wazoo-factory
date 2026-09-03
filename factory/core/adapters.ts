@@ -251,11 +251,7 @@ export class GitHubAppAdapter implements GitHubAdapter {
     );
   }
 
-  async addLabel(
-    repository: string,
-    issueNumber: number,
-    label: string,
-  ) {
+  async addLabel(repository: string, issueNumber: number, label: string) {
     await this.api(`/repos/${repository}/issues/${issueNumber}/labels`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -270,7 +266,9 @@ export class GitHubAppAdapter implements GitHubAdapter {
     description?: string,
   ) {
     try {
-      await this.api(`/repos/${repository}/labels/${encodeURIComponent(label)}`);
+      await this.api(
+        `/repos/${repository}/labels/${encodeURIComponent(label)}`,
+      );
     } catch {
       await this.api(`/repos/${repository}/labels`, {
         method: "POST",
@@ -357,11 +355,7 @@ export class GhAdapter implements GitHubAdapter {
     return { id: result.id, html_url: result.url };
   }
 
-  async addLabel(
-    repository: string,
-    issueNumber: number,
-    label: string,
-  ) {
+  async addLabel(repository: string, issueNumber: number, label: string) {
     await this.run([
       "issue",
       "edit",

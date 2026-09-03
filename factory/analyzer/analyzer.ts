@@ -69,7 +69,10 @@ export async function analyzeIssue(
 
 export interface AnalyzeIssueTool {
   description: string;
-  execute(input: unknown, ctx?: unknown): Promise<AnalysisResult & { model: string; analyzedAt: string }>;
+  execute(
+    input: unknown,
+    ctx?: unknown,
+  ): Promise<AnalysisResult & { model: string; analyzedAt: string }>;
 }
 
 /** Framework-free executor factory; the Eve tool file wraps this in defineTool. */

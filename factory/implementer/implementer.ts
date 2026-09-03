@@ -52,9 +52,7 @@ export interface ImplementerTool {
 }
 
 /** Framework-free executor factory; the Eve tool file wraps this in defineTool. */
-export function createImplementerTool(
-  deps: ImplementerDeps,
-): ImplementerTool {
+export function createImplementerTool(deps: ImplementerDeps): ImplementerTool {
   return {
     description: DEFAULT_IMPLEMENTER_TOOL_DESCRIPTION,
     execute: (task, workspacePath) => implementTask(deps, task, workspacePath),

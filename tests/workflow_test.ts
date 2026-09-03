@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { HmacApprovalSigner, newApproval } from "@/factory/core/authorization.ts";
+import {
+  HmacApprovalSigner,
+  newApproval,
+} from "@/factory/core/authorization.ts";
 import type {
   GitHubAdapter,
   ReviewAdapter,
@@ -83,7 +86,10 @@ class FakeGitHub implements GitHubAdapter {
     };
   }
   async postIssueComment() {
-    return { id: 1, html_url: "https://github.com/wazootech/example/issues/1#comment-1" };
+    return {
+      id: 1,
+      html_url: "https://github.com/wazootech/example/issues/1#comment-1",
+    };
   }
   async addLabel() {}
   async ensureLabel() {}

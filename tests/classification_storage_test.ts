@@ -104,6 +104,8 @@ describe("classification storage through WorkflowStore", () => {
 
   it("returns undefined for a missing digest", async () => {
     const store = new MemoryWorkflowStore();
-    expect(await store.get<ClassificationResult>("a".repeat(64))).toBeUndefined();
+    expect(
+      await store.get<ClassificationResult>("a".repeat(64)),
+    ).toBeUndefined();
   });
 });

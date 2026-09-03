@@ -1,7 +1,4 @@
-import {
-  buildSystemPrompt,
-  buildUserPrompt,
-} from "./eval/prompt.ts";
+import { buildSystemPrompt, buildUserPrompt } from "./eval/prompt.ts";
 import type { z } from "zod";
 import type { ClassificationInput } from "./schema.ts";
 

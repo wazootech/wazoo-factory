@@ -38,14 +38,22 @@ describe("formatClassificationComment", () => {
   it("uses ✨ icon for features and 📝 for docs", () => {
     const feature = formatClassificationComment({
       ...baseResult,
-      classification: { ...baseResult.classification, category: "feature", confidence: 0.7 },
+      classification: {
+        ...baseResult.classification,
+        category: "feature",
+        confidence: 0.7,
+      },
     });
     expect(feature).toContain("✨");
     expect(feature).toContain("> **Category**: Feature");
 
     const docs = formatClassificationComment({
       ...baseResult,
-      classification: { ...baseResult.classification, category: "docs", confidence: 0.4 },
+      classification: {
+        ...baseResult.classification,
+        category: "docs",
+        confidence: 0.4,
+      },
     });
     expect(docs).toContain("📝");
     expect(docs).toContain("> **Category**: Docs");

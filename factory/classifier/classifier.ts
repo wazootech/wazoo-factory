@@ -208,10 +208,13 @@ export function formatClassificationAudit(
 }
 
 /** Format a classification result as a readable GitHub issue comment. */
-export function formatClassificationComment(result: ClassificationResult): string {
+export function formatClassificationComment(
+  result: ClassificationResult,
+): string {
   const { category, confidence, rationale } = result.classification;
   const icon = category === "bug" ? "🐛" : category === "feature" ? "✨" : "📝";
-  const confidenceLabel = confidence >= 0.8 ? "high" : confidence >= 0.5 ? "medium" : "low";
+  const confidenceLabel =
+    confidence >= 0.8 ? "high" : confidence >= 0.5 ? "medium" : "low";
   return [
     `> **Issue Classification** ${icon}`,
     `>`,
@@ -231,13 +234,29 @@ export function classificationLabel(category: string): {
 } {
   switch (category) {
     case "bug":
-      return { label: "factory:bug", color: "d73a4a", description: "Classified as a bug by the Wazoo factory" };
+      return {
+        label: "factory:bug",
+        color: "d73a4a",
+        description: "Classified as a bug by the Wazoo factory",
+      };
     case "feature":
-      return { label: "factory:feature", color: "a2eeef", description: "Classified as a feature by the Wazoo factory" };
+      return {
+        label: "factory:feature",
+        color: "a2eeef",
+        description: "Classified as a feature by the Wazoo factory",
+      };
     case "docs":
-      return { label: "factory:docs", color: "0075ca", description: "Classified as documentation by the Wazoo factory" };
+      return {
+        label: "factory:docs",
+        color: "0075ca",
+        description: "Classified as documentation by the Wazoo factory",
+      };
     default:
-      return { label: "factory:unclassified", color: "ededed", description: "Classification pending" };
+      return {
+        label: "factory:unclassified",
+        color: "ededed",
+        description: "Classification pending",
+      };
   }
 }
 
