@@ -186,8 +186,16 @@ export class FactoryWorkflow {
     );
     const running = this.transition(workflow, "implementing");
     await this.store.saveWorkflow(running, workflow.revision);
+    // Give the executor repo context: when the implement spec omits
+    // affectedFiles, fall back to the plan's analyzer-derived list so the
+    // model always sees the files the change is expected to touch.
+    const specWithContext = spec.affectedFiles?.length
+      ? spec
+      : workflow.plan.affectedFiles?.length
+        ? { ...spec, affectedFiles: workflow.plan.affectedFiles }
+        : spec;
     const result = await this.sandbox.implement(
-      spec,
+      specWithContext,
       workflow.request.repository.worktree,
     );
     const implementation = ImplementationResult.parse({

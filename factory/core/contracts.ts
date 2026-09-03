@@ -55,6 +55,8 @@ export const Plan = z.object({
   summary: z.string().min(1),
   steps: z.array(z.string().min(1)).min(1),
   candidateIssues: z.array(IssueAssociation),
+  /** Analyzer-derived files the implementer should read for context. */
+  affectedFiles: z.array(z.string().min(1).max(500)).max(100).optional(),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export type Plan = z.infer<typeof Plan>;
