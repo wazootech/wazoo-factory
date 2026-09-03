@@ -447,6 +447,8 @@ export class FunctionReviewAdapter implements ReviewAdapter {
 export interface SandboxHandle {
   run(options: {
     command: string;
+    /** Host-side bound; backends may also cancel server-side when supported. */
+    timeoutMs?: number;
   }): PromiseLike<{ exitCode: number; stdout: string; stderr: string }>;
   readTextFile(options: { path: string }): PromiseLike<string | null>;
   writeTextFile(options: { path: string; content: string }): PromiseLike<void>;
@@ -469,6 +471,8 @@ export const EXECUTOR_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
 export const DEFAULT_EXECUTOR_ATTEMPTS = 3;
 /** #68: exactly one repair attempt after failed checks; never more. */
 export const DEFAULT_EXECUTOR_REPAIRS = 1;
+/** Host-side bound per sandbox command; conventionally 124 on timeout. */
+export const DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS = 300_000;
 const EXECUTOR_BACKOFF_MS: readonly number[] = [250, 1000];
 /** ImplementationOutput caps each check's output at 20k; keep entries honest. */
 const MAX_CHECK_OUTPUT = 20_000;
@@ -512,6 +516,8 @@ export interface EveNativeOptions {
   attempts?: number;
   /** Injected backoff wait so unit tests never sleep for real. */
   delay?: (ms: number) => Promise<void>;
+  /** Host-side bound per sandbox command; defaults to DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS. */
+  commandTimeoutMs?: number;
 }
 
 export function resolveExecutorModel(
@@ -564,6 +570,33 @@ function shellQuote(value: string): string {
 
 function truncateOutput(output: string, max: number): string {
   return output.length <= max ? output : output.slice(-max);
+}
+
+/** Bound a sandbox command with a host-side race; 124 on timeout. */
+function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        Object.assign(new Error(`${label} timed out after ${timeoutMs}ms`), {
+          code: 124,
+        }),
+      );
+    }, timeoutMs);
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**
@@ -860,8 +893,16 @@ export class EveNativeExecutor implements Executor {
 
   private async runInWorkspace(command: string, workspacePath: string) {
     const full = `cd ${shellQuote(workspacePath)} && ${command}`;
+    const timeoutMs =
+      this.options.commandTimeoutMs ?? DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS;
     try {
-      const result = await this.options.sandbox.run({ command: full });
+      // Pass the timeout through to backends that can cancel server-side;
+      // the host-side race below still guarantees a bounded wait either way.
+      const result = await withTimeout(
+        this.options.sandbox.run({ command: full, timeoutMs }),
+        timeoutMs,
+        full,
+      );
       return {
         // Backends that return a code expose it; a missing code means success.
         exitCode: typeof result?.exitCode === "number" ? result.exitCode : 0,

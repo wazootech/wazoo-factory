@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_EXECUTOR_CHECKS,
+  DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS,
   EveNativeExecutor,
   type ExecutionResult,
   type SandboxHandle,
@@ -39,15 +40,17 @@ function makeSandbox(
 ) {
   const commands: string[] = [];
   const writes: Array<{ path: string; content: string }> = [];
-  const run = vi.fn(async ({ command }: { command: string }) => {
-    commands.push(command);
-    const result = handler ? await handler(command, writes) : okRun;
-    return {
-      exitCode: result.exitCode,
-      stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
-    };
-  });
+  const run = vi.fn(
+    async (options: { command: string; timeoutMs?: number }) => {
+      commands.push(options.command);
+      const result = handler ? await handler(options.command, writes) : okRun;
+      return {
+        exitCode: result.exitCode,
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+      };
+    },
+  );
   const readTextFile = vi.fn(async ({ path }: { path: string }) =>
     readHandler ? await readHandler(path) : null,
   );
@@ -57,7 +60,7 @@ function makeSandbox(
     },
   );
   const sandbox: SandboxHandle = { run, readTextFile, writeTextFile };
-  return { sandbox, commands, writes, readTextFile };
+  return { sandbox, commands, writes, readTextFile, runMock: run };
 }
 
 type Generate = (params: {
@@ -70,7 +73,11 @@ type GenerateParams = { system: string; prompt: string };
 function makeExecutor(
   sandbox: SandboxHandle,
   generate: Generate,
-  options: { attempts?: number; delay?: (ms: number) => Promise<void> } = {},
+  options: {
+    attempts?: number;
+    delay?: (ms: number) => Promise<void>;
+    commandTimeoutMs?: number;
+  } = {},
 ) {
   return new EveNativeExecutor({
     sandbox,
@@ -78,6 +85,7 @@ function makeExecutor(
     checks: DEFAULT_EXECUTOR_CHECKS,
     attempts: options.attempts,
     delay: options.delay ?? (async () => {}),
+    commandTimeoutMs: options.commandTimeoutMs,
   });
 }
 
@@ -403,6 +411,62 @@ describe("EveNativeExecutor (#68)", () => {
     const call = generate.mock.calls[0]![0];
     expect(call.prompt).toContain("B".repeat(5_000)); // tail preserved
     expect(call.prompt).not.toContain("A".repeat(25_000)); // head dropped
+  });
+
+  it("times out hung sandbox commands as failed checks (exit code 124)", async () => {
+    const { sandbox } = makeSandbox(() => new Promise(() => {}));
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate, {
+      commandTimeoutMs: 50,
+    });
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    expect(result.success).toBe(false);
+    // Full suite on implement + exactly one repair attempt: every command
+    // hangs, so all six checks time out and no second repair is attempted.
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(result.checksRun).toHaveLength(6);
+    expect(result.checksRun.every((check) => check.exitCode === 124)).toBe(
+      true,
+    );
+    expect(
+      result.checksRun.every((check) =>
+        check.output?.includes("timed out after 50ms"),
+      ),
+    ).toBe(true);
+    expectValid(result);
+  });
+
+  it("passes the per-command timeout through to the sandbox handle", async () => {
+    const { sandbox, runMock } = makeSandbox();
+    const executor = makeExecutor(
+      sandbox,
+      vi.fn(async (_params: GenerateParams) => editBatch()),
+      { commandTimeoutMs: 5_000 },
+    );
+
+    await executor.run(baseTask, workspacePath);
+
+    expect(runMock.mock.calls).toHaveLength(3);
+    for (const [options] of runMock.mock.calls) {
+      expect(options.command).toMatch(/^cd '/);
+      expect(options.timeoutMs).toBe(5_000);
+    }
+  });
+
+  it("applies the default per-command timeout when none is configured", async () => {
+    const { sandbox, runMock } = makeSandbox();
+    const executor = makeExecutor(
+      sandbox,
+      vi.fn(async (_params: GenerateParams) => editBatch()),
+    );
+
+    await executor.run(baseTask, workspacePath);
+
+    expect(runMock.mock.calls[0]![0].timeoutMs).toBe(
+      DEFAULT_EXECUTOR_COMMAND_TIMEOUT_MS,
+    );
   });
 
   it("truncates long check output to the ImplementationOutput cap", async () => {
