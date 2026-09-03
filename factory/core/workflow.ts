@@ -18,9 +18,11 @@ import {
   VerificationEvidence,
   ReviewVerdict,
   redactCheckOutput,
+  redactSecrets,
   redactTrace,
 } from "./contracts.ts";
 import type {
+  ExecutionResult,
   GitHubAdapter,
   ReviewAdapter,
   SandboxAdapter,
@@ -186,10 +188,55 @@ export class FactoryWorkflow {
     );
     const running = this.transition(workflow, "implementing");
     await this.store.saveWorkflow(running, workflow.revision);
-    const result = await this.sandbox.implement(
-      spec,
-      workflow.request.repository.worktree,
-    );
+    // Give the executor repo context: when the implement spec omits
+    // affectedFiles, fall back to the plan's analyzer-derived list so the
+    // model always sees the files the change is expected to touch.
+    const specWithContext = spec.affectedFiles?.length
+      ? spec
+      : workflow.plan.affectedFiles?.length
+        ? { ...spec, affectedFiles: workflow.plan.affectedFiles }
+        : spec;
+    let result: ExecutionResult;
+    try {
+      result = await this.sandbox.implement(
+        specWithContext,
+        workflow.request.repository.worktree,
+      );
+    } catch (error) {
+      // #70 review (medium) / #69 design note: never strand a workflow in
+      // `implementing`. A thrown executor error — model-call exhaustion after
+      // retries, permission/path refusals — lands a structured failure record
+      // with an `error` field, a `failed` transition, and a `workflow.failed`
+      // audit. The idempotency key is marked so a re-invoke returns the failed
+      // workflow instead of double-executing or dying with
+      // `Invalid transition: implementing -> implementing`. The error is
+      // rethrown so the caller still sees the original failure.
+      const name = error instanceof Error ? error.name : "Error";
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const message = redactSecrets(rawMessage.slice(0, 2_000));
+      const failure = ImplementationResult.parse({
+        workflowId,
+        success: false,
+        filesChanged: [],
+        revision: workflow.request.repository.baseRevision,
+        checks: [],
+        error: { name, message },
+        artifactDigest: digestArtifact({ success: false, name, message }),
+      });
+      const next = this.transition(running, "failed", {
+        implementation: failure,
+      });
+      next.idempotency[idempotencyKey] = failure.artifactDigest;
+      await this.store.put(failure.artifactDigest, failure);
+      await this.store.saveWorkflow(next, running.revision);
+      await this.audit(
+        next,
+        "workflow.failed",
+        workflow.request.requester,
+        failure.artifactDigest,
+      );
+      throw error;
+    }
     const implementation = ImplementationResult.parse({
       workflowId,
       success: result.success,

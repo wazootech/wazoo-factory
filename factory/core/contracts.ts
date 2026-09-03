@@ -55,6 +55,8 @@ export const Plan = z.object({
   summary: z.string().min(1),
   steps: z.array(z.string().min(1)).min(1),
   candidateIssues: z.array(IssueAssociation),
+  /** Analyzer-derived files the implementer should read for context. */
+  affectedFiles: z.array(z.string().min(1).max(500)).max(100).optional(),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export type Plan = z.infer<typeof Plan>;
@@ -72,6 +74,13 @@ export const ImplementationResult = z.object({
   revision: z.string().min(1),
   checks: z.array(CheckEvidence),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  /** Failure context when the stage throws instead of resolving (#69). */
+  error: z
+    .object({
+      name: z.string().min(1),
+      message: z.string().min(1).max(2_000),
+    })
+    .optional(),
 });
 export type ImplementationResult = z.infer<typeof ImplementationResult>;
 
@@ -170,17 +179,20 @@ export function redactTrace(value: unknown): unknown {
   );
 }
 
+const secretPattern =
+  /(token|secret|password|authorization|api[-_]?key)\s*[:=]\s*[^\s,;]+/gi;
+
+/** Mask inline secrets (`key=value`) in arbitrary text before persistence. */
+export function redactSecrets(value: string): string {
+  return value.replace(secretPattern, "$1=[REDACTED]");
+}
+
 export function redactCheckOutput(check: z.infer<typeof CheckEvidence>) {
   return {
     ...check,
     ...(check.output === undefined
       ? {}
-      : {
-          output: check.output.replace(
-            /(token|secret|password|authorization|api[-_]?key)\s*[:=]\s*[^\s,;]+/gi,
-            "$1=[REDACTED]",
-          ),
-        }),
+      : { output: redactSecrets(check.output) }),
   };
 }
 

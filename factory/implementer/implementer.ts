@@ -15,6 +15,7 @@ export interface ImplementerDeps {
     workspacePath: string;
     modelContext?: Record<string, unknown>;
     permissions?: { shell: boolean; read: boolean; write: boolean };
+    affectedFiles?: string[];
   }): Promise<ImplementationOutput>;
   /** Model id recorded in the result. */
   model: string;
@@ -35,6 +36,7 @@ export async function implementTask(
     workspacePath,
     modelContext: input.modelContext,
     permissions: input.permissions,
+    affectedFiles: input.affectedFiles,
   });
 
   return {

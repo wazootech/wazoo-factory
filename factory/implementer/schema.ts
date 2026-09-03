@@ -18,6 +18,7 @@ export const ImplementationTask = z.object({
       write: z.boolean(),
     })
     .optional(),
+  affectedFiles: z.array(z.string().min(1).max(500)).max(100).optional(),
 });
 export type ImplementationTask = z.infer<typeof ImplementationTask>;
 
