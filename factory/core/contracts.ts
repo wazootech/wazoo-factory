@@ -86,7 +86,14 @@ export const ImplementationResult = z.object({
   filesChanged: z.array(z.string().min(1)),
   /** #78: post-edit contents of filesChanged, capped by the executor so the
    *  persisted artifact and the review context stay bounded. The reviewer
-   *  judges this source; a record without it cannot be meaningfully reviewed. */
+   *  judges this source; a record without it cannot be meaningfully reviewed.
+   *  #83 decision (recorded on #83): this content is persisted and
+   *  review-forwarded raw, without sanitization — the sandbox is the trust
+   *  boundary (the bytes already crossed to the executor model), and blanket
+   *  redaction would corrupt legitimate source (`DEEPSEEK_API_KEY =
+   *  process.env...` matches with no word boundary). Redaction discipline
+   *  stays on derived records: check output and error text — never content
+   *  echoed into logs, audits, or error messages. */
   changes: z.array(ReviewChange).max(REVIEW_MAX_CHANGES).optional(),
   revision: z.string().min(1),
   checks: z.array(CheckEvidence),
@@ -175,6 +182,24 @@ export function canTransition(from: WorkflowStage, to: WorkflowStage) {
   return transitions[from].includes(to);
 }
 
+/**
+ * Deterministic fingerprint of a recorded artifact value: sha256 over the
+ * value's own fields in stable (sorted-key) JSON order.
+ *
+ * #79 decision (recorded on #79): digests are idempotency/approval handles
+ * and artifact-store keys — NOT content hashes of the stored record. A stored
+ * record carries `artifactDigest` referencing itself, so
+ * digestArtifact(storedRecord) never equals its own key by construction, and
+ * failure records are keyed by failureDigest() over a strict subset while the
+ * stored artifact carries more fields. The digest's guarantee is exactness of
+ * the value that was approved/stored, not correspondence to external state
+ * (sandbox contents, base revision) — that is the job of revision-checked
+ * single-writer transitions and the audit trail. Artifacts embed their
+ * workflowId, so keys are workflow-scoped and identical values dedupe
+ * harmlessly. If content verification of stored records is ever wanted,
+ * define canonical serialization that excludes the self-referential
+ * artifactDigest field and key records by their own content.
+ */
 export function digestArtifact(value: unknown): string {
   return createHash("sha256")
     .update(JSON.stringify(value, Object.keys(value as object).sort()))
