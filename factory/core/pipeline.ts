@@ -20,7 +20,7 @@ import {
   reviewImplementation,
   type ReviewerDeps,
 } from "../reviewer/reviewer.ts";
-import type { ReviewOutput } from "../reviewer/schema.ts";
+import { capReviewChanges, type ReviewOutput } from "../reviewer/schema.ts";
 
 // Pipeline orchestrator (#69): chains classifier → analyzer → implementer →
 // reviewer over the FactoryWorkflow state machine, passing typed artifacts
@@ -290,11 +290,22 @@ export class FactoryPipeline {
       // 6. Review → ReviewVerdict (independent reviewer agent core).
       stage = "review";
       const implementation = current.implementation!;
+      // #78: the reviewer judges real code, never names alone. A successful
+      // implementation whose executor carried no change contents cannot be
+      // meaningfully reviewed — halt here deterministically instead of
+      // handing the reviewer an empty source and trusting it to refuse.
+      if (!implementation.changes?.length) {
+        throw new Error(
+          "implementation carried no change contents; the review needs the " +
+            "post-edit source (#78)",
+        );
+      }
       const reviewResult = await reviewImplementation(review, {
         workflowId: request.id,
         repository: request.repository.repository,
         revision: current.verification!.revision,
         filesChanged: implementation.filesChanged,
+        changes: capReviewChanges(implementation.changes),
         implementationSummary: storedPlan.summary,
         implementer: request.requester,
       });

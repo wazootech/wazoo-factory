@@ -117,12 +117,20 @@ class FakeGitHub implements GitHubAdapter {
   async ensureLabel() {}
 }
 
+const tracedSource = [
+  "export function trace(frame: unknown): void {",
+  "  console.log(frame);",
+  "}",
+].join("\n");
+
 function sandbox(): SandboxAdapter {
   return {
     async implement() {
       return {
         success: true,
         filesChanged: ["src/tracer.ts"],
+        // #78: the executor carries the post-edit source it wrote.
+        changes: [{ path: "src/tracer.ts", content: tracedSource }],
         checksRun: [{ name: "typecheck", exitCode: 0 }],
         interrupted: false,
         resumed: false,
@@ -261,8 +269,78 @@ describe("FactoryPipeline", () => {
     expect(outcome.workflow.implementation?.filesChanged).toEqual([
       "src/tracer.ts",
     ]);
+    // The implementation artifact carried the source it wrote, and the review
+    // verdict was reached over it.
+    expect(outcome.workflow.implementation?.changes).toEqual([
+      { path: "src/tracer.ts", content: tracedSource },
+    ]);
     expect(outcome.workflow.review?.passed).toBe(true);
     expect(outcome.review.model).toBe("test-reviewer");
+  });
+
+  it("supplies the post-edit source to the review gate (#78)", async () => {
+    let seenPrompt = "";
+    const pipeline = new FactoryPipeline(
+      deps({
+        review: {
+          ...reviewDeps(),
+          generate: async (params: { prompt: string }) => {
+            seenPrompt = params.prompt;
+            return {
+              passed: true,
+              findings: [],
+              summary: "Implementation matches the plan.",
+              riskAssessment: {
+                sideEffectRisk: "low",
+                performanceRisk: "none",
+                backwardsCompatibilityRisk: "none",
+              },
+            };
+          },
+        },
+      }),
+    );
+    const outcome = await pipeline.run(request, issue);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // The reviewer judged actual code, not file names alone.
+    expect(seenPrompt).toContain("## Changed Source");
+    expect(seenPrompt).toContain("### src/tracer.ts");
+    expect(seenPrompt).toContain("console.log(frame)");
+  });
+
+  it("halts at the review stage when the implementation carried no source (#78)", async () => {
+    const pipeline = new FactoryPipeline(
+      deps({
+        workflow: new FactoryWorkflow(
+          new MemoryWorkflowStore(),
+          new FakeWorkspace(),
+          new FakeGitHub(),
+          {
+            async implement() {
+              return {
+                success: true,
+                filesChanged: ["src/tracer.ts"],
+                checksRun: [{ name: "typecheck", exitCode: 0 }],
+                interrupted: false,
+                resumed: false,
+              };
+            },
+          },
+          verification,
+          reviewAdapter,
+          "test-secret",
+        ),
+      }),
+    );
+    const outcome = await pipeline.run(request, issue);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    // No code, no review — deterministic, not left to the model to refuse.
+    expect(outcome.stage).toBe("review");
+    expect(outcome.error.message).toContain("no change contents");
+    // The reviewer core never ran; the workflow waits at verified.
+    expect(outcome.workflow?.stage).toBe("verified");
   });
 
   it("halts with the failing stage when classification throws", async () => {

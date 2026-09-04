@@ -67,6 +67,18 @@ export function buildReviewerUserPrompt(
     sections.push(`- ${file}`);
   }
 
+  // #78: the review judges the actual change. Each section holds a changed
+  // file's post-edit source, already capped for context by the pipeline; the
+  // <omitted> marker entry means more files were changed than fit the cap.
+  sections.push(`\n## Changed Source`);
+  sections.push(
+    "Post-edit contents of the changed files (capped for context). Base your findings on this source and the revision above.",
+  );
+  for (const change of input.changes) {
+    sections.push(`### ${change.path}`);
+    sections.push(change.content);
+  }
+
   sections.push(`\n## Task`);
   sections.push(
     `Review the implementation at revision ${input.revision} and provide structured feedback as a JSON object matching the schema in the system prompt.`,
