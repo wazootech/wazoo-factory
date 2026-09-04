@@ -134,13 +134,13 @@ describe("analyzeIssue (#67)", () => {
           },
           resolveEnv: () => {
             throw new Error(
-              "analyzer requires AI_GATEWAY_API_KEY in the host runtime",
+              "analyzer requires DEEPSEEK_API_KEY in the host runtime",
             );
           },
         }),
         baseInput,
       ),
-    ).rejects.toThrow(/requires AI_GATEWAY_API_KEY/);
+    ).rejects.toThrow(/requires DEEPSEEK_API_KEY/);
     // A missing key cannot be fixed by retrying: no model call, no backoff.
     expect(generate).not.toHaveBeenCalled();
     expect(delays).toEqual([]);
@@ -180,22 +180,23 @@ describe("analyzeIssue (#67)", () => {
 describe("live analyzer env resolution", () => {
   it("requires a gateway key at resolution time", () => {
     expect(() => resolveLiveAnalyzerEnv({})).toThrow(
-      /requires AI_GATEWAY_API_KEY/,
+      /requires DEEPSEEK_API_KEY/,
     );
   });
 
   it("exposes resolveEnv on lazy live deps for one-time config resolution", () => {
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
     vi.stubEnv("AI_GATEWAY_API_KEY", "");
     vi.stubEnv("OPENCODE_GO_API_KEY", "");
     const deps = createLazyLiveDeps();
     try {
       // resolveEnv throws before any generate call when no key is set.
-      expect(() => deps.resolveEnv?.()).toThrow(/requires AI_GATEWAY_API_KEY/);
+      expect(() => deps.resolveEnv?.()).toThrow(/requires DEEPSEEK_API_KEY/);
     } finally {
       vi.unstubAllEnvs();
     }
     // With a key configured, the same deps resolve once and memoize.
-    vi.stubEnv("AI_GATEWAY_API_KEY", "test-key");
+    vi.stubEnv("DEEPSEEK_API_KEY", "test-key");
     try {
       expect(() => deps.resolveEnv?.()).not.toThrow();
       expect(() => deps.resolveEnv?.()).not.toThrow();
@@ -204,19 +205,24 @@ describe("live analyzer env resolution", () => {
     }
   });
 
-  it("defaults the model and honors ANALYZER_MODEL", () => {
-    expect(resolveLiveAnalyzerEnv({ AI_GATEWAY_API_KEY: "k" })).toMatchObject({
+  it("defaults the model to DeepSeek direct and honors ANALYZER_MODEL", () => {
+    expect(resolveLiveAnalyzerEnv({ DEEPSEEK_API_KEY: "k" })).toMatchObject({
       apiKey: "k",
       model: ANALYZER_DEFAULT_MODEL,
       baseURL: ANALYZER_DEFAULT_BASE_URL,
     });
+    expect(ANALYZER_DEFAULT_MODEL).toBe("deepseek-v4-flash");
+    expect(ANALYZER_DEFAULT_BASE_URL).toBe("https://api.deepseek.com");
     expect(
       resolveLiveAnalyzerEnv({
-        AI_GATEWAY_API_KEY: "k",
+        DEEPSEEK_API_KEY: "k",
         ANALYZER_MODEL: "anthropic/claude-haiku-4",
       }).model,
     ).toBe("anthropic/claude-haiku-4");
-    // Legacy key fallback matches the classifier's resolution.
+    // Gateway keys remain as fallbacks for hosts pointed there explicitly.
+    expect(resolveLiveAnalyzerEnv({ AI_GATEWAY_API_KEY: "gw" }).apiKey).toBe(
+      "gw",
+    );
     expect(
       resolveLiveAnalyzerEnv({ OPENCODE_GO_API_KEY: "legacy" }).apiKey,
     ).toBe("legacy");

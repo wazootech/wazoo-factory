@@ -102,8 +102,8 @@ export interface LiveClassifierOptions {
   maxRetries?: number;
 }
 
-export const CLASSIFIER_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
-export const CLASSIFIER_DEFAULT_MODEL = "openai/gpt-4.1-nano";
+export const CLASSIFIER_DEFAULT_BASE_URL = "https://api.deepseek.com";
+export const CLASSIFIER_DEFAULT_MODEL = "deepseek-v4-flash";
 
 export interface ResolvedLiveClassifier {
   apiKey: string;
@@ -114,17 +114,19 @@ export interface ResolvedLiveClassifier {
 /** Single env-resolution point shared by the Eve tool and the webhook channel. */
 export function resolveLiveClassifierEnv(
   env: {
+    DEEPSEEK_API_KEY?: string;
     AI_GATEWAY_API_KEY?: string;
     OPENCODE_GO_API_KEY?: string;
     CLASSIFIER_MODEL?: string;
     CLASSIFIER_BASE_URL?: string;
   } = process.env,
 ): ResolvedLiveClassifier {
-  const apiKey = env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
+  // DeepSeek direct is the prod default; the gateway keys remain as
+  // fallbacks for hosts that explicitly point CLASSIFIER_BASE_URL there.
+  const apiKey =
+    env.DEEPSEEK_API_KEY ?? env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "classifier requires AI_GATEWAY_API_KEY in the host runtime",
-    );
+    throw new Error("classifier requires DEEPSEEK_API_KEY in the host runtime");
   }
   return {
     apiKey,

@@ -36,6 +36,7 @@ export function buildSystemPrompt(): string {
     "- Automated failure alerts (failing checks, drift detection) report something broken: bug.",
     "",
     "Output discipline:",
+    "- Respond with exactly one JSON object containing only these three fields.",
     '- category: one of "bug", "feature", "docs".',
     "- confidence: your certainty in [0,1]. Reserve >= 0.8 for unambiguous cases.",
     "- rationale: at most three sentences. Cite the deciding signal from the issue text.",

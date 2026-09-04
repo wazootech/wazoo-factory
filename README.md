@@ -77,9 +77,12 @@ pnpm build
 
 Requires Node.js 24+.
 
-The Eve agent uses Vercel AI Gateway for inference and Vercel Sandbox for
-isolated execution. Link the repository to a Vercel project and set
-`AI_GATEWAY_API_KEY` before running `pnpm dev`; local development creates the
+The Eve agent uses DeepSeek's official API for inference (`deepseek-v4-flash`
+at `https://api.deepseek.com`) and Vercel Sandbox for isolated execution. Set
+`DEEPSEEK_API_KEY` before running `pnpm dev`; `AI_GATEWAY_API_KEY` and
+`OPENCODE_GO_API_KEY` remain as fallbacks for hosts that explicitly point
+`CLASSIFIER_BASE_URL`/`ANALYZER_BASE_URL` at the Vercel AI Gateway. Link the
+repository to a Vercel project for the sandbox; local development creates the
 same hosted sandbox backend used in production. Sandbox egress is restricted to
 GitHub and npm registries for repository and dependency operations. Keep the
 key in the app runtime environment and never pass it to the sandbox.
