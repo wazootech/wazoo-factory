@@ -16,6 +16,10 @@ export interface AnalyzeIssueDeps {
   /** Injected backoff wait so tests never sleep for real. */
   delay?: (ms: number) => Promise<void>;
   attempts?: number;
+  /** Optional one-time seam setup (the live deps resolve the host env here).
+   *  Runs before any retry so deterministic config errors — a missing
+   *  AI_GATEWAY_API_KEY — fail fast instead of consuming the retry budget. */
+  resolveEnv?: () => void;
 }
 
 export const DEFAULT_ATTEMPTS = 3;
@@ -40,6 +44,11 @@ export async function analyzeIssue(
 ): Promise<AnalysisResult & { model: string; analyzedAt: string }> {
   // Parse first: invalid tool input must fail before any model call.
   const input = AnalysisInput.parse(rawInput);
+
+  // Resolve the seam once, before any retry: deterministic setup errors (a
+  // missing gateway key) can never succeed on a later attempt, so they must
+  // surface immediately rather than burn the attempt/backoff budget.
+  deps.resolveEnv?.();
 
   const attempts = deps.attempts ?? DEFAULT_ATTEMPTS;
   const system = buildAnalyzerSystemPrompt();
@@ -75,7 +84,9 @@ export interface AnalyzeIssueTool {
   ): Promise<AnalysisResult & { model: string; analyzedAt: string }>;
 }
 
-/** Framework-free executor factory; the Eve tool file wraps this in defineTool. */
+/** Framework-free executor factory for tests and non-Eve callers. The Eve tool
+ * file calls analyzeIssue(liveDeps, input) directly, mirroring classify_issue;
+ * this factory exists for unit tests and future programmatic use (#67 review). */
 export function createAnalyzeIssueTool(
   deps: AnalyzeIssueDeps,
 ): AnalyzeIssueTool {
@@ -162,7 +173,8 @@ export async function createLiveGenerate(
 /**
  * Memoizing live-deps builder shared by the Eve tool and future callers. Env
  * resolution stays lazy so merely importing consumers never requires
- * credentials to be present (#67).
+ * credentials to be present; resolveEnv forces one-time resolution so
+ * analyzeIssue can fail fast on a missing key before its retry loop (#67).
  */
 export function createLazyLiveDeps(): AnalyzeIssueDeps {
   let generatePromise: Promise<AnalyzeIssueDeps["generate"]> | undefined;
@@ -177,6 +189,7 @@ export function createLazyLiveDeps(): AnalyzeIssueDeps {
     },
     attempts: DEFAULT_ATTEMPTS,
     delay: (ms) => new Promise((r) => setTimeout(r, ms)),
+    resolveEnv: resolve,
     generate: (params) => {
       const r = resolve();
       if (!generatePromise) {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   analyzeIssue,
   createAnalyzeIssueTool,
+  createLazyLiveDeps,
   resolveLiveAnalyzerEnv,
   ANALYZER_DEFAULT_BASE_URL,
   ANALYZER_DEFAULT_MODEL,
@@ -65,6 +66,7 @@ function makeDeps(
     now: overrides.now ?? (() => new Date("2026-09-03T00:00:00.000Z")),
     delay: overrides.delay ?? (async () => {}),
     attempts: overrides.attempts,
+    resolveEnv: overrides.resolveEnv,
   };
 }
 
@@ -91,15 +93,57 @@ describe("analyzeIssue (#67)", () => {
     expect(call.system).toContain("probes");
   });
 
-  it("fails before any model call when the input is not a classified issue", async () => {
+  it("fails before any model or env call when the input is not a classified issue", async () => {
     const generate = okGenerate();
+    const resolveEnv = vi.fn();
     await expect(
-      analyzeIssue(makeDeps({ generate }), {
+      analyzeIssue(makeDeps({ generate, resolveEnv }), {
         ...baseInput,
         classification: { category: "nonsense", confidence: 1 },
       }),
     ).rejects.toThrow();
     expect(generate).not.toHaveBeenCalled();
+    expect(resolveEnv).not.toHaveBeenCalled();
+  });
+
+  it("resolves the env seam once, before the first model call", async () => {
+    const order: string[] = [];
+    const resolveEnv = vi.fn(() => {
+      order.push("resolveEnv");
+    });
+    const generate = vi.fn(async (_params: GenerateParams) => {
+      order.push("generate");
+      return validAnalysis;
+    });
+    await analyzeIssue(makeDeps({ generate, resolveEnv }), baseInput);
+    expect(order).toEqual(["resolveEnv", "generate"]);
+    expect(resolveEnv).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails fast on a deterministic env error instead of retrying it", async () => {
+    const generate = okGenerate();
+    const delays: number[] = [];
+    await expect(
+      analyzeIssue(
+        makeDeps({
+          generate,
+          attempts: 3,
+          delay: async (ms) => {
+            delays.push(ms);
+          },
+          resolveEnv: () => {
+            throw new Error(
+              "analyzer requires AI_GATEWAY_API_KEY in the host runtime",
+            );
+          },
+        }),
+        baseInput,
+      ),
+    ).rejects.toThrow(/requires AI_GATEWAY_API_KEY/);
+    // A missing key cannot be fixed by retrying: no model call, no backoff.
+    expect(generate).not.toHaveBeenCalled();
+    expect(delays).toEqual([]);
   });
 
   it("retries an invalid analysis with backoff and throws when it never complies", async () => {
@@ -138,6 +182,26 @@ describe("live analyzer env resolution", () => {
     expect(() => resolveLiveAnalyzerEnv({})).toThrow(
       /requires AI_GATEWAY_API_KEY/,
     );
+  });
+
+  it("exposes resolveEnv on lazy live deps for one-time config resolution", () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "");
+    vi.stubEnv("OPENCODE_GO_API_KEY", "");
+    const deps = createLazyLiveDeps();
+    try {
+      // resolveEnv throws before any generate call when no key is set.
+      expect(() => deps.resolveEnv?.()).toThrow(/requires AI_GATEWAY_API_KEY/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    // With a key configured, the same deps resolve once and memoize.
+    vi.stubEnv("AI_GATEWAY_API_KEY", "test-key");
+    try {
+      expect(() => deps.resolveEnv?.()).not.toThrow();
+      expect(() => deps.resolveEnv?.()).not.toThrow();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("defaults the model and honors ANALYZER_MODEL", () => {
