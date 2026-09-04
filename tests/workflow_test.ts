@@ -20,7 +20,10 @@ import {
   type WorkflowRecord,
 } from "@/factory/core/contracts.ts";
 import { MemoryWorkflowStore } from "@/factory/core/storage.ts";
-import { FactoryWorkflow } from "@/factory/core/workflow.ts";
+import {
+  FactoryWorkflow,
+  WorkflowRaceLostError,
+} from "@/factory/core/workflow.ts";
 
 const request: ChangeRequest = {
   id: "workflow-e2e",
@@ -124,10 +127,14 @@ const review: ReviewAdapter = {
 };
 
 /**
- * #80 test seam: a store that simulates a concurrent writer racing a failure
- * landing. When the next failed-transition save arrives from `fromStage`, the
- * writer advances the workflow first (bumping the revision), so the failure
- * landing's optimistic save loses and throws a revision conflict.
+ * #80/#87 test seam: a store that simulates a concurrent writer racing a
+ * workflow save. When the next save arrives from `fromStage` with the
+ * expected revision, the writer advances the workflow first (bumping the
+ * revision), so the racing save's optimistic write loses and throws a
+ * revision conflict. raceFailureLanding targets a failure landing (a
+ * failed-transition save); raceSuccessSave targets a success-transition save
+ * (verify/submitReview/implement/draft-PR) — the guard is the pre-save state
+ * and revision, which is what makes the injection fire on exactly one save.
  */
 class ConcurrentWriterStore extends MemoryWorkflowStore {
   private injections: Array<{
@@ -142,12 +149,15 @@ class ConcurrentWriterStore extends MemoryWorkflowStore {
     this.injections.push({ fromStage, advance });
   }
 
+  raceSuccessSave(
+    fromStage: WorkflowRecord["stage"],
+    advance: (current: WorkflowRecord) => WorkflowRecord,
+  ) {
+    this.injections.push({ fromStage, advance });
+  }
+
   async saveWorkflow(workflow: WorkflowRecord, expectedRevision?: number) {
-    if (
-      workflow.stage === "failed" &&
-      expectedRevision !== undefined &&
-      this.injections.length > 0
-    ) {
+    if (expectedRevision !== undefined && this.injections.length > 0) {
       const injection = this.injections[0]!;
       const current = await this.getWorkflow(workflow.workflowId);
       if (
@@ -156,7 +166,7 @@ class ConcurrentWriterStore extends MemoryWorkflowStore {
         current.revision === expectedRevision
       ) {
         this.injections.shift();
-        // The concurrent writer saves first; the failure landing now conflicts.
+        // The concurrent writer saves first; the racing save now conflicts.
         await super.saveWorkflow(injection.advance(current), current.revision);
       }
     }
@@ -953,5 +963,315 @@ describe("FactoryWorkflow", () => {
       (event) => event.action === "workflow.failed",
     );
     expect(failures).toHaveLength(1);
+  });
+
+  it("adopts the winner's workflow when a twin saves the identical verify outcome (#87)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+
+    // The twin's identical verify lands first: same checks, so the same
+    // artifact digest and the same idempotency marker — a twin's identical
+    // save *is* this call's result.
+    store.raceSuccessSave("implemented", (current) => {
+      const checks = [{ name: "test", exitCode: 0, output: "passed" }];
+      const twinVerification = VerificationEvidence.parse({
+        workflowId: current.workflowId,
+        passed: true,
+        checks,
+        revision: current.request.repository.baseRevision,
+        artifactDigest: digestArtifact(checks),
+      });
+      return {
+        ...current,
+        stage: "verified",
+        verification: twinVerification,
+        idempotency: {
+          ...current.idempotency,
+          [`verify:${current.workflowId}`]: twinVerification.artifactDigest,
+        },
+        revision: current.revision + 1,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    const result = await workflow.verify(request.id);
+    expect(result.stage).toBe("verified");
+    expect(result.verification?.passed).toBe(true);
+    // The winner's advance stands (revision bumped by the twin's save).
+    expect(result.revision).toBe(4);
+    // No failure record or audit over the healthy advance, and the losing
+    // call did not duplicate the winner's verified audit.
+    const audits = await store.getAudit(request.id);
+    expect(audits.some((event) => event.action === "workflow.failed")).toBe(
+      false,
+    );
+    expect(
+      audits.filter((event) => event.action === "workflow.verified"),
+    ).toHaveLength(0);
+  });
+
+  it("throws the typed race error when a concurrent writer lands a divergent verify (#87)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+
+    // The twin's verify lands first but with a *different* outcome — a
+    // divergent digest, so this call's result does not stand.
+    store.raceSuccessSave("implemented", (current) => ({
+      ...current,
+      stage: "verified",
+      verification: VerificationEvidence.parse({
+        workflowId: current.workflowId,
+        passed: true,
+        checks: [{ name: "other", exitCode: 0 }],
+        revision: current.request.repository.baseRevision,
+        artifactDigest: "c".repeat(64),
+      }),
+      idempotency: {
+        ...current.idempotency,
+        [`verify:${current.workflowId}`]: "c".repeat(64),
+      },
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    await expect(workflow.verify(request.id)).rejects.toThrow(
+      WorkflowRaceLostError,
+    );
+
+    // The winner's divergent save stands; the loser's conflict never reached
+    // the failure machinery — no failure record, no failed audit.
+    const advanced = await store.getWorkflow(request.id);
+    expect(advanced?.stage).toBe("verified");
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(false);
+  });
+
+  it("returns the winner's implemented state when a twin completed implementation before the running save (#87)", async () => {
+    const store = new ConcurrentWriterStore();
+    const specs: TaskSpec[] = [];
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      recordingSandbox(specs),
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+
+    // The twin (via a duplicate approval or replay) already completed the
+    // implementation before our running save lands.
+    store.raceSuccessSave("planned", (current) => ({
+      ...current,
+      stage: "implemented",
+      implementation: ImplementationResult.parse({
+        workflowId: current.workflowId,
+        success: true,
+        filesChanged: ["src/tracer.ts"],
+        revision: current.request.repository.baseRevision,
+        checks: [{ name: "typecheck", exitCode: 0 }],
+        artifactDigest: "b".repeat(64),
+      }),
+      idempotency: {
+        ...current.idempotency,
+        [`implement:${current.workflowId}`]: "b".repeat(64),
+      },
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const result = await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+    expect(result.stage).toBe("implemented");
+    // The twin's save bumped from the planned revision (1) to 2.
+    expect(result.revision).toBe(2);
+    // Our invocation never ran the executor — the twin's result stands.
+    expect(specs).toHaveLength(0);
+  });
+
+  it("throws the typed race error when a twin is mid-implementation (#87)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+
+    // The twin is in-flight: it already saved `implementing` (same stage our
+    // running save writes), so another writer owns execution — returning
+    // would double-run the executor.
+    store.raceSuccessSave("planned", (current) => ({
+      ...current,
+      stage: "implementing",
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    await expect(
+      workflow.implement(
+        request.id,
+        { id: "implementation-1", prompt: "Implement the tracer" },
+        [approval(request.id, "mutate-repository", planDigest)],
+      ),
+    ).rejects.toThrow(WorkflowRaceLostError);
+
+    // The in-flight twin's state stands; nothing was failed or stranded.
+    const state = await store.getWorkflow(request.id);
+    expect(state?.stage).toBe("implementing");
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(false);
+  });
+
+  it("adopts the winner's pr_ready workflow when a twin created the draft PR first (#87)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+    await workflow.verify(request.id);
+    await workflow.reviewWorkflow(request.id, "independent-reviewer");
+    const reviewed = await store.getWorkflow(request.id);
+    expect(reviewed?.review?.artifactDigest).toBeTruthy();
+
+    // The twin's identical pr_ready save lands first. Its idempotency digest
+    // derives from the shared review artifact, so any twin's save is this
+    // call's outcome by construction.
+    store.raceSuccessSave("reviewed", (current) => ({
+      ...current,
+      stage: "pr_ready",
+      pullRequest: {
+        workflowId: current.workflowId,
+        url: "https://github.com/wazootech/example/pull/2",
+        number: 2,
+        revision: "implementation-revision",
+        artifactDigest: current.review!.artifactDigest,
+      },
+      idempotency: {
+        ...current.idempotency,
+        [`draft-pr:${current.workflowId}`]: current.review!.artifactDigest,
+      },
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const result = await workflow.createDraftPullRequest(
+      request.id,
+      {
+        repository: request.repository.repository,
+        title: request.summary,
+        body: "Automated draft",
+        head: "factory/workflow-e2e",
+        base: request.repository.baseBranch,
+      },
+      [
+        approval(
+          request.id,
+          "approve-review",
+          reviewed!.review!.artifactDigest,
+        ),
+        approval(
+          request.id,
+          "create-draft-pr",
+          reviewed!.review!.artifactDigest,
+        ),
+      ],
+    );
+    expect(result.stage).toBe("pr_ready");
+    expect(result.pullRequest?.number).toBe(2);
+    expect(result.revision).toBe(6);
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(false);
   });
 });
