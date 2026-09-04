@@ -18,7 +18,7 @@ export interface AnalyzeIssueDeps {
   attempts?: number;
   /** Optional one-time seam setup (the live deps resolve the host env here).
    *  Runs before any retry so deterministic config errors — a missing
-   *  AI_GATEWAY_API_KEY — fail fast instead of consuming the retry budget. */
+   *  DEEPSEEK_API_KEY — fail fast instead of consuming the retry budget. */
   resolveEnv?: () => void;
 }
 
@@ -105,8 +105,8 @@ export interface LiveAnalyzerOptions {
   maxRetries?: number;
 }
 
-export const ANALYZER_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
-export const ANALYZER_DEFAULT_MODEL = "anthropic/claude-sonnet-5";
+export const ANALYZER_DEFAULT_BASE_URL = "https://api.deepseek.com";
+export const ANALYZER_DEFAULT_MODEL = "deepseek-v4-flash";
 
 export interface ResolvedLiveAnalyzer {
   apiKey: string;
@@ -117,15 +117,19 @@ export interface ResolvedLiveAnalyzer {
 /** Single env-resolution point shared by the Eve tool and future callers. */
 export function resolveLiveAnalyzerEnv(
   env: {
+    DEEPSEEK_API_KEY?: string;
     AI_GATEWAY_API_KEY?: string;
     OPENCODE_GO_API_KEY?: string;
     ANALYZER_MODEL?: string;
     ANALYZER_BASE_URL?: string;
   } = process.env,
 ): ResolvedLiveAnalyzer {
-  const apiKey = env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
+  // DeepSeek direct is the prod default; the gateway keys remain as
+  // fallbacks for hosts that explicitly point ANALYZER_BASE_URL there.
+  const apiKey =
+    env.DEEPSEEK_API_KEY ?? env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
   if (!apiKey) {
-    throw new Error("analyzer requires AI_GATEWAY_API_KEY in the host runtime");
+    throw new Error("analyzer requires DEEPSEEK_API_KEY in the host runtime");
   }
   return {
     apiKey,
