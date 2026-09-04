@@ -305,6 +305,8 @@ export class FactoryPipeline {
         repository: request.repository.repository,
         revision: current.verification!.revision,
         filesChanged: implementation.filesChanged,
+        // #83: forwarded raw by decision — the sandbox is the trust boundary;
+        // see the ImplementationResult.changes field comment in contracts.ts.
         changes: capReviewChanges(implementation.changes),
         implementationSummary: storedPlan.summary,
         implementer: request.requester,
