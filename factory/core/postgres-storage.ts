@@ -1,6 +1,9 @@
 import type { Approval } from "./authorization.ts";
 import { AuditEvent, WorkflowRecord } from "./contracts.ts";
-import type { WorkflowStore } from "./storage.ts";
+import {
+  WorkflowRevisionConflictError,
+  type WorkflowStore,
+} from "./storage.ts";
 
 /**
  * Minimal SQL surface both the local PGlite adapter and a hosted Postgres
@@ -69,8 +72,7 @@ export class PostgresWorkflowStore implements WorkflowStore {
         "UPDATE factory_workflow SET body = $1 WHERE workflow_id = $2 AND body->>'revision' = $3",
         [workflow, workflow.workflowId, String(expectedRevision)],
       );
-      if (result.affectedRows !== 1)
-        throw new Error("Workflow revision conflict");
+      if (result.affectedRows !== 1) throw new WorkflowRevisionConflictError();
       return;
     }
     await this.db.query(
