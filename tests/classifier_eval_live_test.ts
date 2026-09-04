@@ -13,17 +13,17 @@ import { renderReport } from "@/factory/classifier/eval/report.ts";
 import type { Classification } from "@/factory/classifier/eval/schema.ts";
 
 // Live eval per the #39 resolution. Gated on credentials so CI never calls a
-// model; run manually with any OpenAI-compatible gateway (e.g. Vercel AI Gateway):
-//   CLASSIFIER_EVAL_BASE_URL=https://ai-gateway.vercel.sh/v1 \
-//   CLASSIFIER_EVAL_API_KEY=<vercel-ai-gateway-key> \
-//   [CLASSIFIER_EVAL_MODEL=minimax/minimax-m3] \
+// model; run manually against any OpenAI-compatible endpoint (e.g. DeepSeek):
+//   CLASSIFIER_EVAL_BASE_URL=https://api.deepseek.com \
+//   CLASSIFIER_EVAL_API_KEY=<deepseek-api-key> \
+//   [CLASSIFIER_EVAL_MODEL=deepseek-v4-flash] \
 //   pnpm vitest run tests/classifier_eval_live_test.ts
 //
-// CLASSIFIER_EVAL_MODEL is the gateway wire id: createLiveGenerate passes it
-// verbatim to the provider. Vercel uses provider/model format.
+// CLASSIFIER_EVAL_MODEL is the wire id: createLiveGenerate passes it verbatim
+// to the provider.
 const baseUrl = process.env.CLASSIFIER_EVAL_BASE_URL;
 const apiKey = process.env.CLASSIFIER_EVAL_API_KEY;
-const modelId = process.env.CLASSIFIER_EVAL_MODEL ?? "minimax/minimax-m3";
+const modelId = process.env.CLASSIFIER_EVAL_MODEL ?? "deepseek-v4-flash";
 const liveEnabled = Boolean(baseUrl && apiKey);
 
 interface PredictionRecord {

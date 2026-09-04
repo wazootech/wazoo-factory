@@ -79,13 +79,13 @@ Requires Node.js 24+.
 
 The Eve agent uses DeepSeek's official API for inference (`deepseek-v4-flash`
 at `https://api.deepseek.com`) and Vercel Sandbox for isolated execution. Set
-`DEEPSEEK_API_KEY` before running `pnpm dev`; `AI_GATEWAY_API_KEY` and
-`OPENCODE_GO_API_KEY` remain as fallbacks for hosts that explicitly point
-`CLASSIFIER_BASE_URL`/`ANALYZER_BASE_URL` at the Vercel AI Gateway. Link the
-repository to a Vercel project for the sandbox; local development creates the
-same hosted sandbox backend used in production. Sandbox egress is restricted to
-GitHub and npm registries for repository and dependency operations. Keep the
-key in the app runtime environment and never pass it to the sandbox.
+`DEEPSEEK_API_KEY` before running `pnpm dev`; `CLASSIFIER_MODEL`,
+`ANALYZER_MODEL`, and `FACTORY_EXECUTOR_MODEL` escape-hatch onto a different
+model without code changes. Link the repository to a Vercel project for the
+sandbox; local development creates the same hosted sandbox backend used in
+production. Sandbox egress is restricted to GitHub and npm registries for
+repository and dependency operations. Keep the key in the app runtime
+environment and never pass it to the sandbox.
 
 Vercel's Hobby plan currently includes a monthly Sandbox allowance, but it is
 intended for personal, non-commercial use. Sandbox usage is metered and local

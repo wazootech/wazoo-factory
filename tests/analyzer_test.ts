@@ -186,8 +186,6 @@ describe("live analyzer env resolution", () => {
 
   it("exposes resolveEnv on lazy live deps for one-time config resolution", () => {
     vi.stubEnv("DEEPSEEK_API_KEY", "");
-    vi.stubEnv("AI_GATEWAY_API_KEY", "");
-    vi.stubEnv("OPENCODE_GO_API_KEY", "");
     const deps = createLazyLiveDeps();
     try {
       // resolveEnv throws before any generate call when no key is set.
@@ -219,12 +217,7 @@ describe("live analyzer env resolution", () => {
         ANALYZER_MODEL: "anthropic/claude-haiku-4",
       }).model,
     ).toBe("anthropic/claude-haiku-4");
-    // Gateway keys remain as fallbacks for hosts pointed there explicitly.
-    expect(resolveLiveAnalyzerEnv({ AI_GATEWAY_API_KEY: "gw" }).apiKey).toBe(
-      "gw",
-    );
-    expect(
-      resolveLiveAnalyzerEnv({ OPENCODE_GO_API_KEY: "legacy" }).apiKey,
-    ).toBe("legacy");
+    // The retired gateway key is no longer part of the env contract (the
+    // parameter type admits only DEEPSEEK_API_KEY now).
   });
 });

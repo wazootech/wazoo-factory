@@ -23,8 +23,7 @@ export default defineTool({
         id: input.taskId,
         prompt: input.prompt,
         modelContext: {
-          model:
-            process.env.FACTORY_EXECUTOR_MODEL ?? "anthropic/claude-sonnet-5",
+          model: process.env.FACTORY_EXECUTOR_MODEL ?? "deepseek-v4-flash",
         },
         permissions: { shell: true, read: true, write: true },
       },

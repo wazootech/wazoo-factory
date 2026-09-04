@@ -115,16 +115,11 @@ export interface ResolvedLiveClassifier {
 export function resolveLiveClassifierEnv(
   env: {
     DEEPSEEK_API_KEY?: string;
-    AI_GATEWAY_API_KEY?: string;
-    OPENCODE_GO_API_KEY?: string;
     CLASSIFIER_MODEL?: string;
     CLASSIFIER_BASE_URL?: string;
   } = process.env,
 ): ResolvedLiveClassifier {
-  // DeepSeek direct is the prod default; the gateway keys remain as
-  // fallbacks for hosts that explicitly point CLASSIFIER_BASE_URL there.
-  const apiKey =
-    env.DEEPSEEK_API_KEY ?? env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
+  const apiKey = env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     throw new Error("classifier requires DEEPSEEK_API_KEY in the host runtime");
   }
@@ -135,7 +130,7 @@ export function resolveLiveClassifierEnv(
   };
 }
 
-// Live adapter over an OpenAI-compatible gateway using generateText +
+// Live adapter over an OpenAI-compatible endpoint using generateText +
 // Output.object() per #33. The JSON-extraction middleware strips markdown
 // fences that small models wrap around otherwise-valid JSON. Requires
 // credentials at runtime by construction, so it stays out of unit tests.

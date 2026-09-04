@@ -63,7 +63,7 @@ export class FactoryRuntime {
       new ExecutorSandboxAdapter(
         new EveNativeExecutor({
           sandbox,
-          apiKey: process.env.AI_GATEWAY_API_KEY,
+          apiKey: process.env.DEEPSEEK_API_KEY,
         }),
       ),
       new WspaceVerificationAdapter(new WspaceAdapter()),

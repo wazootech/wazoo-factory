@@ -27,7 +27,7 @@ export default defineTool({
     const sandbox = await ctx.getSandbox();
     const executor = new EveNativeExecutor({
       sandbox,
-      apiKey: process.env.AI_GATEWAY_API_KEY,
+      apiKey: process.env.DEEPSEEK_API_KEY,
     });
     const deps: ImplementerDeps = {
       model: task.modelContext?.model ?? resolveExecutorModel(),
