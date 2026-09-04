@@ -15,6 +15,7 @@ import {
   REPOSITORY_CAP,
   TITLE_CAP,
 } from "@/factory/classifier/schema.ts";
+import { FileTreePaths } from "@/factory/analyzer/schema.ts";
 import { createLazyLiveDeps as createLazyLiveAnalyzerDeps } from "@/factory/analyzer/analyzer.ts";
 import { createLazyLiveDeps as createLazyLiveReviewerDeps } from "@/factory/reviewer/reviewer.ts";
 import {
@@ -62,6 +63,9 @@ const inputSchema = z.object({
   labels: z.array(z.string().max(LABEL_CAP)).default([]),
   repositoryDescription: z.string().max(DESCRIPTION_CAP).default(""),
   url: z.string().url(),
+  // Optional pruned source-layout snapshot for the analyzer stage; same caps
+  // as AnalysisInput so an oversized snapshot fails at the tool boundary.
+  fileTree: FileTreePaths.default([]),
 });
 
 export default defineTool({
@@ -92,6 +96,7 @@ export default defineTool({
       body: input.body,
       labels: input.labels,
       url: input.url,
+      fileTree: input.fileTree,
     };
     const pipeline = new FactoryPipeline({
       workflow,

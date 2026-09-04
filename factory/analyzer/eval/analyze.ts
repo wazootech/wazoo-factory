@@ -57,6 +57,7 @@ export function mapCaseToAnalysisInput(
     labels: kase.legacyLabels,
     repository: kase.repository,
     repositoryDescription: kase.repositoryDescription,
+    fileTree: kase.fileTree,
     classification: kase.classification,
   });
 }

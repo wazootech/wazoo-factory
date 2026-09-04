@@ -9,7 +9,11 @@ import {
   ANALYZER_DEFAULT_MODEL,
   type AnalyzeIssueDeps,
 } from "@/factory/analyzer/analyzer.ts";
-import { AnalysisResult } from "@/factory/analyzer/schema.ts";
+import {
+  AnalysisResult,
+  FILE_TREE_MAX_CHARS,
+} from "@/factory/analyzer/schema.ts";
+import { buildAnalyzerUserPrompt } from "@/factory/analyzer/prompt.ts";
 import analyzeIssueTool from "@/agent/tools/analyze_issue.ts";
 
 // Analyzer unit tests (#67): injected generate fakes drive probe generation,
@@ -91,6 +95,53 @@ describe("analyzeIssue (#67)", () => {
     expect(call.prompt).toContain("## Classification");
     expect(call.prompt).toContain("Category: bug (confidence: 0.92)");
     expect(call.system).toContain("probes");
+  });
+
+  it("renders repository description and the pruned source layout when present", async () => {
+    const prompt = buildAnalyzerUserPrompt({
+      ...baseInput,
+      classification: { category: "bug" as const, confidence: 0.92 },
+      fileTree: ["src/routes/worlds.ts", "src/routes/users.ts", "src/parser.ts"],
+    });
+    expect(prompt).toContain("## Repository description");
+    expect(prompt).toContain("Parser SDK");
+    expect(prompt).toContain("## Repository source layout");
+    expect(prompt).toContain(
+      "Name files in your specification and affectedFiles using the exact paths below.",
+    );
+    // Sorted inside the fenced listing.
+    expect(prompt.indexOf("src/parser.ts")).toBeLessThan(
+      prompt.indexOf("src/routes/users.ts"),
+    );
+    expect(prompt.indexOf("src/routes/users.ts")).toBeLessThan(
+      prompt.indexOf("src/routes/worlds.ts"),
+    );
+    expect(prompt).toContain("```text");
+  });
+
+  it("omits the layout when no file tree is provided", () => {
+    const prompt = buildAnalyzerUserPrompt({
+      ...baseInput,
+      classification: { category: "bug" as const, confidence: 0.92 },
+    });
+    expect(prompt).not.toContain("## Repository source layout");
+    expect(prompt).not.toContain("```text");
+  });
+
+  it("carries an oversized fileTree through to AnalysisInput validation", async () => {
+    const generate = okGenerate();
+    const chunk = "src/".padEnd(300, "a");
+    const oversize = Array.from(
+      { length: Math.ceil(FILE_TREE_MAX_CHARS / chunk.length) + 2 },
+      () => chunk,
+    );
+    await expect(
+      analyzeIssue(
+        makeDeps({ generate }),
+        { ...baseInput, fileTree: oversize },
+      ),
+    ).rejects.toThrow(/exceeds the .*-char layout budget|fileTree/);
+    expect(generate).not.toHaveBeenCalled();
   });
 
   it("fails before any model or env call when the input is not a classified issue", async () => {

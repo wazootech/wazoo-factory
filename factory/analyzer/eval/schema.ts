@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { IssueCategory } from "../../classifier/eval/schema.ts";
-import { AnalysisResult, RiskLevel } from "../schema.ts";
+import { AnalysisResult, FileTreePaths, RiskLevel } from "../schema.ts";
 
 // Analyzer eval schemas: gold-label fixture cases plus the ratified analysis
 // outcomes the deterministic scorer measures (#89).
@@ -35,6 +35,11 @@ export const AnalyzerCaseFile = z.object({
   body: z.string().max(10_000).default(""),
   url: z.string().url(),
   repositoryDescription: z.string().max(500).default(""),
+  // Pruned source-layout snapshot captured at the change's base revision so
+  // the live run gives the analyzer the same repository context production
+  // would. `fileTreeRevision` records which commit the snapshot came from.
+  fileTree: FileTreePaths.default([]),
+  fileTreeRevision: z.string().min(1).max(40).optional(),
   legacyLabels: z.array(z.string().max(50)).default([]),
   classification: z.object({
     category: IssueCategory,

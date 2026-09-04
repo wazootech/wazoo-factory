@@ -49,6 +49,22 @@ export function buildAnalyzerUserPrompt(
   sections.push(`Title: ${input.title}`);
   sections.push(`Repository: ${input.repository}`);
 
+  if (input.repositoryDescription) {
+    sections.push(`\n## Repository description`);
+    sections.push(input.repositoryDescription);
+  }
+
+  if (input.fileTree && input.fileTree.length > 0) {
+    sections.push(`\n## Repository source layout (files at the change's base revision)`);
+    sections.push(
+      `Name files in your specification and affectedFiles using the exact paths below. ` +
+        `When the issue describes a surface (a page, route, module, or component), ` +
+        `resolve it to the matching path in the layout. Only propose a path not ` +
+        `listed here when the change must create a new file.`,
+    );
+    sections.push(renderFileTreeLayout(input.fileTree));
+  }
+
   if (input.body) {
     sections.push(`\n## Body\n${input.body}`);
   }
@@ -68,4 +84,10 @@ export function buildAnalyzerUserPrompt(
   );
 
   return sections.join("\n");
+}
+
+// Renders the source layout as a fenced, sorted listing. Empty input renders
+// nothing so prompts stay unchanged when no repository context is available.
+function renderFileTreeLayout(fileTree: readonly string[]): string {
+  return ["```text", ...[...fileTree].sort(), "```"].join("\n");
 }

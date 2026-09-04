@@ -22,6 +22,7 @@ import {
   mapCaseToAnalysisInput,
 } from "@/factory/analyzer/eval/analyze.ts";
 import { AnalysisResult, RiskLevel } from "@/factory/analyzer/schema.ts";
+import { pruneFileTreePaths } from "@/factory/analyzer/eval/tree.ts";
 
 const baseCase = {
   id: "repo-1",
@@ -215,6 +216,59 @@ describe("analyzer eval isolation feed", () => {
     expect(input.issueNumber).toBe(1);
     expect(input.repository).toBe("wazootech/repo");
     expect(input.labels).toEqual(["bug"]);
+    expect(input.fileTree).toEqual([]);
+  });
+
+  it("forwards the case's captured source layout to the analyzer input", () => {
+    const input = mapCaseToAnalysisInput(
+      AnalyzerCaseFile.parse({
+        ...baseCase,
+        fileTree: ["src/a.ts", "src/a.test.ts"],
+      }),
+    );
+    expect(input.fileTree).toEqual(["src/a.ts", "src/a.test.ts"]);
+  });
+});
+
+describe("analyzer eval source-layout capture", () => {
+  it("keeps source, colocated tests, and root manifests", () => {
+    const pruned = pruneFileTreePaths([
+      "src/term/identity.ts",
+      "src/term/term.test.ts",
+      "package.json",
+      "tsconfig.json",
+    ]);
+    expect(pruned).toEqual([
+      "package.json",
+      "src/term/identity.ts",
+      "src/term/term.test.ts",
+      "tsconfig.json",
+    ]);
+  });
+
+  it("drops generated, vendored, doc, lock, and dotfile noise deterministically", () => {
+    const pruned = pruneFileTreePaths([
+      "package-lock.json",
+      "deno.lock",
+      ".github/workflows/ci.yml",
+      ".npmrc",
+      "node_modules/x/index.ts",
+      "test/w3c/fixtures/query-01.rq",
+      "docs/architecture.md",
+      "README.md",
+      "src/mod.ts",
+      "src/mod.test.ts",
+    ]);
+    expect(pruned).toEqual(["src/mod.test.ts", "src/mod.ts"]);
+  });
+
+  it("sorts and dedupes", () => {
+    const pruned = pruneFileTreePaths([
+      "src/z.ts",
+      "src/a.ts",
+      "src/z.ts",
+    ]);
+    expect(pruned).toEqual(["src/a.ts", "src/z.ts"]);
   });
 });
 
