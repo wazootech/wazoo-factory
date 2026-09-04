@@ -61,8 +61,20 @@ const jsonFactory: StoreFactory = async () => {
   };
 };
 
+// #51: PGlite instances are fully isolated — each owns its WASM memory and
+// mounted FS (probed: 8 concurrently-constructed instances in one process
+// never cross-talk, and the read-back approval contract is per-instance).
+// Serializing construction keeps that invariant structural: no future vitest
+// concurrency config can ever interleave two instances mid-initialization.
+let pgliteInit: Promise<void> = Promise.resolve();
 const pgliteFactory: StoreFactory = async () => {
-  const db = new PGlite();
+  let instance: PGlite | undefined;
+  const gate = pgliteInit.then(async () => {
+    instance = new PGlite();
+  });
+  pgliteInit = gate.catch(() => {});
+  await gate;
+  const db = instance!;
   const store = new PostgresWorkflowStore(pgliteDatabase(db));
   return {
     store,
@@ -242,6 +254,32 @@ for (const { name, factory } of stores) {
         expect(await store.getApproval("missing")).toBeUndefined();
       } finally {
         await dispose();
+      }
+    });
+
+    // #51: the flake's read-back guarantee rests on per-store isolation — a
+    // save in one store instance must never be visible in a sibling instance
+    // created by the same factory in the same process.
+    it("keeps per-store instances isolated from each other", async () => {
+      const first = await factory();
+      const second = await factory();
+      try {
+        const signer = new HmacApprovalSigner("test-secret");
+        const approval = newApproval(
+          principal,
+          "workflow-1",
+          "approve-plan",
+          "a".repeat(64),
+          signer,
+          60_000,
+          new Date(request.createdAt),
+        );
+        await first.store.saveApproval(approval);
+        expect(await first.store.getApproval(approval.id)).toEqual(approval);
+        expect(await second.store.getApproval(approval.id)).toBeUndefined();
+      } finally {
+        await first.dispose();
+        await second.dispose();
       }
     });
   });
