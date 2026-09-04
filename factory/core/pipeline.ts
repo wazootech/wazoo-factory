@@ -1,6 +1,8 @@
 import type { Approval } from "./authorization.ts";
 import {
+  digestArtifact,
   type ChangeRequest,
+  type GateAction,
   type Plan,
   type ReviewVerdict,
   type WorkflowRecord,
@@ -76,6 +78,37 @@ export interface PipelineDeps {
   review: ReviewerDeps;
   /** Approval gates; absent by design so a miswired pipeline fails loudly. */
   approvals: PipelineApprovals;
+}
+
+/**
+ * Build the pipeline's approval gates from a single mint function. The
+ * digests are bound at the exact seam each gate authorizes: approve-plan and
+ * associate-issues against the plan as submitted (which the workflow digests
+ * identically — the pipeline passes affectedFiles explicitly, so its merge is
+ * a no-op), mutate-repository against the stored plan's artifactDigest, and
+ * approve-review/create-draft-pr against the stored verdict's artifactDigest.
+ * #76: the Eve tool wires `mint` to the human's approval flow; tests inject a
+ * recording fake.
+ */
+export function mintingApprovals(
+  mint: (
+    action: GateAction,
+    digest: string,
+  ) => (Approval | string)[] | Promise<(Approval | string)[]>,
+): PipelineApprovals {
+  return {
+    plan: async (plan) => [
+      ...(await mint("approve-plan", digestArtifact(plan))),
+      ...(await mint("associate-issues", digestArtifact(plan))),
+    ],
+    implement: async (plan) => [
+      ...(await mint("mutate-repository", plan.artifactDigest)),
+    ],
+    review: async (verdict) => [
+      ...(await mint("approve-review", verdict.artifactDigest)),
+      ...(await mint("create-draft-pr", verdict.artifactDigest)),
+    ],
+  };
 }
 
 export type PipelineOutcome =
