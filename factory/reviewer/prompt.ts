@@ -67,16 +67,33 @@ export function buildReviewerUserPrompt(
     sections.push(`- ${file}`);
   }
 
-  // #78: the review judges the actual change. Each section holds a changed
-  // file's post-edit source, already capped for context by the pipeline; the
-  // <omitted> marker entry means more files were changed than fit the cap.
-  sections.push(`\n## Changed Source`);
-  sections.push(
-    "Post-edit contents of the changed files (capped for context). Base your findings on this source and the revision above.",
-  );
-  for (const change of input.changes) {
-    sections.push(`### ${change.path}`);
-    sections.push(change.content);
+  // #82: when the executor captured the change as a unified diff against the
+  // base revision, the hunks are exactly the content under review — tail
+  // edits in large files stay visible where whole-file head-truncation would
+  // hide them — so the diff replaces the whole-file heads as the review
+  // basis. The fallback below keeps the post-edit source for git-less
+  // sandboxes.
+  if (input.diff?.length) {
+    sections.push(`\n## Change Diff`);
+    sections.push(
+      "Unified diff of the implemented change against the base revision (capped for context). Base your findings on these hunks and the revision above.",
+    );
+    for (const diff of input.diff) {
+      sections.push(`### ${diff.path}`);
+      sections.push(diff.content);
+    }
+  } else {
+    // #78: the review judges the actual change. Each section holds a changed
+    // file's post-edit source, already capped for context by the pipeline;
+    // the <omitted> marker entry means more files were changed than fit.
+    sections.push(`\n## Changed Source`);
+    sections.push(
+      "Post-edit contents of the changed files (capped for context). Base your findings on this source and the revision above.",
+    );
+    for (const change of input.changes) {
+      sections.push(`### ${change.path}`);
+      sections.push(change.content);
+    }
   }
 
   sections.push(`\n## Task`);

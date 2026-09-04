@@ -20,7 +20,11 @@ import {
   reviewImplementation,
   type ReviewerDeps,
 } from "../reviewer/reviewer.ts";
-import { capReviewChanges, type ReviewOutput } from "../reviewer/schema.ts";
+import {
+  capReviewChanges,
+  capReviewDiff,
+  type ReviewOutput,
+} from "../reviewer/schema.ts";
 
 // Pipeline orchestrator (#69): chains classifier → analyzer → implementer →
 // reviewer over the FactoryWorkflow state machine, passing typed artifacts
@@ -305,9 +309,16 @@ export class FactoryPipeline {
         repository: request.repository.repository,
         revision: current.verification!.revision,
         filesChanged: implementation.filesChanged,
-        // #83: forwarded raw by decision — the sandbox is the trust boundary;
-        // see the ImplementationResult.changes field comment in contracts.ts.
+        // #78: whole-file source, the required fallback carrier — forwarded
+        // raw by decision (#83; see ImplementationResult.changes in
+        // contracts.ts; the sandbox is the trust boundary).
         changes: capReviewChanges(implementation.changes),
+        // #82: prefer the executor-captured hunks when the sandbox exposed
+        // git — the prompt shows the diff, and tail edits in large files are
+        // judged instead of head-truncated away.
+        ...(implementation.diff?.length
+          ? { diff: capReviewDiff(implementation.diff) }
+          : {}),
         implementationSummary: storedPlan.summary,
         implementer: request.requester,
       });

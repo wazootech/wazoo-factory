@@ -262,8 +262,11 @@ export class FactoryWorkflow {
       success: result.success,
       filesChanged: result.filesChanged,
       // #78: carry the post-edit source so the reviewer (and any later stage)
-      // can judge the actual change without re-entering the sandbox.
+      // can judge the actual change without re-entering the sandbox. #82
+      // adds the executor-captured unified diff (hunks against the base
+      // revision) when the sandbox exposed git; the reviewer prefers it.
       changes: result.changes,
+      diff: result.diff,
       revision: workflow.request.repository.baseRevision,
       checks: result.checksRun.map(redactCheckOutput),
       artifactDigest: digestArtifact(result),

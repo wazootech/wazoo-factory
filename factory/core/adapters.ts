@@ -8,7 +8,7 @@ import {
   ImplementationOutput,
   type CheckResult,
 } from "../implementer/schema.ts";
-import { capReviewChanges } from "../reviewer/schema.ts";
+import { capReviewChanges, capReviewDiff } from "../reviewer/schema.ts";
 import type {
   DraftPullRequest,
   IssueAssociation,
@@ -33,6 +33,11 @@ export interface ExecutionResult {
    *  artifact and the review context stay bounded. Absent on legacy paths
    *  whose executors never wrote through this protocol. */
   changes?: Array<{ path: string; content: string }>;
+  /** #82: unified diff of the change against the worktree's base revision,
+   *  captured best-effort when the sandbox exposes git and capped via
+   *  capReviewDiff. Absent when git is unavailable or the capture option is
+   *  off — changes above remains the review's fallback carrier. */
+  diff?: Array<{ path: string; content: string }>;
   checksRun: Array<{ name: string; exitCode: number; output?: string }>;
   summary?: string;
   interrupted?: boolean;
@@ -537,6 +542,10 @@ export interface EveNativeOptions {
   commandTimeoutMs?: number;
   /** Per-phase deadline shared across a phase's checks; defaults to DEFAULT_EXECUTOR_PHASE_TIMEOUT_MS. */
   phaseTimeoutMs?: number;
+  /** #82: best-effort git unified-diff capture of the change against the
+   *  worktree's base revision, for the review to judge hunks. Defaults to
+   *  on; sandboxes without git fall back silently to whole-file source. */
+  captureDiff?: boolean;
 }
 
 export function resolveExecutorModel(
@@ -592,6 +601,39 @@ function shellQuote(value: string): string {
 
 function truncateOutput(output: string, max: number): string {
   return output.length <= max ? output : output.slice(-max);
+}
+
+/**
+ * #82: split a ###FILE-marked per-path diff stream into sections. The
+ * executor emits one `###FILE <path>` marker line before each path's `git
+ * diff` output; splitting on the marker gives exact path→hunk attribution
+ * without parsing git's own headers (whose quoting varies with file names
+ * and core.quotePath). Paths containing a newline would collide with the
+ * marker format — a documented non-goal for model-supplied edit paths; an
+ * empty or absent result simply falls back to whole-file source.
+ */
+function parseMarkedDiffSections(
+  output: string,
+): Array<{ path: string; content: string }> {
+  const sections: Array<{ path: string; content: string[] }> = [];
+  let current: { path: string; content: string[] } | undefined;
+  for (const line of output.split("\n")) {
+    if (line.startsWith("###FILE ")) {
+      if (current?.content.length) {
+        sections.push(current);
+      }
+      current = { path: line.slice("###FILE ".length), content: [] };
+    } else if (current) {
+      current.content.push(line);
+    }
+  }
+  if (current?.content.length) sections.push(current);
+  // git diff output ends with a trailing newline; drop it so content matches
+  // what git printed (paths whose write was a no-op emit an empty section).
+  return sections.map((section) => ({
+    path: section.path,
+    content: section.content.join("\n").replace(/\n$/, ""),
+  }));
 }
 
 /** Bound a sandbox command with a host-side race; 124 on timeout. */
@@ -848,6 +890,22 @@ export class EveNativeExecutor implements Executor {
       summary = `Implementation failed after ${repairs + 1} attempt(s): ${failing}`;
     }
 
+    // #82: best-effort unified diff of the change against the worktree's
+    // base revision when the sandbox exposes git. The reviewer prefers these
+    // hunks over whole-file heads, so tail edits in large files are judged
+    // instead of truncated away. Falls back silently (no diff) when git is
+    // unavailable or capture is off; changes above remain the fallback
+    // carrier.
+    const captured =
+      (this.options.captureDiff ?? true) && filesChanged.length > 0
+        ? await this.captureChangeDiff(
+            workspacePath,
+            filesChanged,
+            commandTimeoutMs,
+          )
+        : undefined;
+    const diff = captured?.length ? capReviewDiff(captured) : undefined;
+
     // #68: ImplementationOutput must validate against the real run results.
     const output = ImplementationOutput.parse({
       success: passed,
@@ -860,7 +918,53 @@ export class EveNativeExecutor implements Executor {
     const changes = capReviewChanges(
       [...contents].map(([path, content]) => ({ path, content })),
     );
-    return { ...output, ...(changes.length ? { changes } : {}) };
+    return {
+      ...output,
+      ...(changes.length ? { changes } : {}),
+      ...(diff ? { diff } : {}),
+    };
+  }
+
+  /**
+   * #82: capture a git unified diff of the executor's own edits against the
+   * worktree's base revision. One sandbox round trip per implement/repair
+   * run: brand-new files are marked intent-to-add so `git diff` sees them,
+   * one marked diff is emitted per changed path (exact attribution without
+   * parsing git's quoting-variable headers), then the marks are dropped so
+   * the index is left exactly as found. This assumes the index sits at the
+   * base revision for the changed paths — worktrees start fresh at the base
+   * revision and the executor never stages or commits, so worktree-vs-index
+   * is precisely the change under review. Best-effort by design: a sandbox
+   * without git yields no diff and the review falls back to whole-file
+   * source (#82).
+   */
+  private async captureChangeDiff(
+    workspacePath: string,
+    filesChanged: string[],
+    commandTimeoutMs: number,
+  ): Promise<Array<{ path: string; content: string }> | undefined> {
+    if (!filesChanged.length) return undefined;
+    const quoted = filesChanged.map((file) => shellQuote(file)).join(" ");
+    const segments = [
+      `git add -N -- ${quoted}`,
+      ...filesChanged.flatMap((file) => [
+        `echo ${shellQuote(`###FILE ${file}`)}`,
+        `git diff --no-ext-diff --unified=3 -- ${shellQuote(file)}`,
+      ]),
+      `git reset -q -- ${quoted}`,
+    ];
+    try {
+      const { exitCode, output } = await this.runInWorkspace(
+        segments.join("; "),
+        workspacePath,
+        commandTimeoutMs,
+      );
+      if (exitCode !== 0) return undefined;
+      const sections = parseMarkedDiffSections(output);
+      return sections.length ? sections : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private async requestEdits(

@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { REVIEW_MAX_CHANGES, ReviewChange } from "../reviewer/schema.ts";
+import {
+  REVIEW_MAX_CHANGES,
+  ReviewChange,
+  ReviewDiff,
+} from "../reviewer/schema.ts";
 
 export const WorkflowStage = z.enum([
   "requested",
@@ -95,6 +99,11 @@ export const ImplementationResult = z.object({
    *  stays on derived records: check output and error text — never content
    *  echoed into logs, audits, or error messages. */
   changes: z.array(ReviewChange).max(REVIEW_MAX_CHANGES).optional(),
+  /** #82: unified diff of the change against the base revision, captured
+   *  best-effort by the executor when the sandbox exposes git and capped
+   *  like changes. The reviewer prefers these hunks (tail edits stay
+   *  visible); changes above remain the required fallback carrier. */
+  diff: z.array(ReviewDiff).max(REVIEW_MAX_CHANGES).optional(),
   revision: z.string().min(1),
   checks: z.array(CheckEvidence),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
