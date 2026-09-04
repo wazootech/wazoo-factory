@@ -457,4 +457,279 @@ describe("FactoryWorkflow", () => {
     expect(replay.stage).toBe("failed");
     expect(calls).toBe(1);
   });
+
+  it("lands a thrown issue-search error in plan() as a failed workflow (#75)", async () => {
+    const store = new MemoryWorkflowStore();
+    let searches = 0;
+    const github: GitHubAdapter = {
+      async searchIssues() {
+        searches += 1;
+        throw new Error("github search unavailable");
+      },
+      async createDraftPullRequest() {
+        return {
+          workflowId: request.id,
+          url: "https://github.com/wazootech/example/pull/2",
+          number: 2,
+          revision: "implementation-revision",
+          artifactDigest: "a".repeat(64),
+        };
+      },
+      async postIssueComment() {
+        return {
+          id: 1,
+          html_url: "https://github.com/wazootech/example/issues/1#comment-1",
+        };
+      },
+      async addLabel() {},
+      async ensureLabel() {},
+    };
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      github,
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const plan = {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    };
+
+    await expect(workflow.plan(request.id, plan, [])).rejects.toThrow(
+      "github search unavailable",
+    );
+
+    // The plan is the artifact, so the structured error rides on it.
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.plan?.error?.name).toBe("Error");
+    expect(failed?.plan?.error?.message).toContain("github search unavailable");
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(true);
+
+    // Re-invoking with the same idempotency key returns the failed workflow
+    // without re-running the seam.
+    const replay = await workflow.plan(request.id, plan, []);
+    expect(replay.stage).toBe("failed");
+    expect(searches).toBe(1);
+  });
+
+  it("lands an approval-resolution error in plan() as a failed workflow (#75)", async () => {
+    const store = new MemoryWorkflowStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const plan = {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    };
+
+    await expect(
+      workflow.plan(request.id, plan, ["missing-approval-id"]),
+    ).rejects.toThrow("Approval record not found");
+
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.plan?.error?.message).toContain("Approval record not found");
+  });
+
+  it("lands a thrown verification error as a failed workflow (#75)", async () => {
+    const store = new MemoryWorkflowStore();
+    let calls = 0;
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      {
+        async verify() {
+          calls += 1;
+          throw new Error("verification infra unavailable");
+        },
+      },
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+
+    await expect(workflow.verify(request.id)).rejects.toThrow(
+      "verification infra unavailable",
+    );
+
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.verification?.passed).toBe(false);
+    expect(failed?.verification?.checks).toEqual([]);
+    expect(failed?.verification?.error?.message).toContain(
+      "verification infra",
+    );
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(true);
+
+    // Re-invoking with the same idempotency key returns the failed workflow
+    // without re-running the seam.
+    const replay = await workflow.verify(request.id);
+    expect(replay.stage).toBe("failed");
+    expect(calls).toBe(1);
+  });
+
+  it("replays a successful verify() idempotently without re-running the seam (#75)", async () => {
+    let calls = 0;
+    const workflow = new FactoryWorkflow(
+      new MemoryWorkflowStore(),
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      {
+        async verify() {
+          calls += 1;
+          return [{ name: "test", exitCode: 0 }];
+        },
+      },
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+
+    const verified = await workflow.verify(request.id);
+    expect(verified.stage).toBe("verified");
+    const replay = await workflow.verify(request.id);
+    expect(replay.stage).toBe("verified");
+    expect(calls).toBe(1);
+  });
+
+  it("lands a thrown reviewer error in reviewWorkflow() as a failed workflow (#75)", async () => {
+    const store = new MemoryWorkflowStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      {
+        async review() {
+          throw new Error("review service unavailable");
+        },
+      },
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+    await workflow.verify(request.id);
+
+    await expect(
+      workflow.reviewWorkflow(request.id, "independent-reviewer"),
+    ).rejects.toThrow("review service unavailable");
+
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.review?.passed).toBe(false);
+    expect(failed?.review?.findings).toEqual([]);
+    expect(failed?.review?.error?.message).toContain("review service");
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(true);
+  });
+
+  it("lands a non-independent submitReview verdict as a failed workflow (#75)", async () => {
+    const store = new MemoryWorkflowStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+    await workflow.verify(request.id);
+
+    await expect(
+      workflow.submitReview(request.id, {
+        reviewer: request.requester,
+        passed: true,
+        findings: [],
+        revision: request.repository.baseRevision,
+      }),
+    ).rejects.toThrow("Review must be independent");
+
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.review?.error?.message).toContain(
+      "Review must be independent",
+    );
+  });
 });

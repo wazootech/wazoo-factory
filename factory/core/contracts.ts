@@ -24,6 +24,15 @@ export type GateAction = z.infer<typeof GateAction>;
 
 const Identifier = z.string().min(1).max(200);
 
+/** Structured failure context attached to a stage artifact when the stage
+ *  throws instead of resolving (#69, #75). Mirrors the implement() pattern:
+ *  name + redacted, capped message so the record is honest and replayable. */
+export const StageError = z.object({
+  name: z.string().min(1),
+  message: z.string().min(1).max(2_000),
+});
+export type StageError = z.infer<typeof StageError>;
+
 export const RepositoryContext = z.object({
   repository: Identifier,
   baseBranch: Identifier.default("main"),
@@ -58,6 +67,9 @@ export const Plan = z.object({
   /** Analyzer-derived files the implementer should read for context. */
   affectedFiles: z.array(z.string().min(1).max(500)).max(100).optional(),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  /** Failure context when plan() throws (#75); the plan is the artifact, so
+   *  the error record rides on it, mirroring ImplementationResult.error. */
+  error: StageError.optional(),
 });
 export type Plan = z.infer<typeof Plan>;
 
@@ -75,12 +87,7 @@ export const ImplementationResult = z.object({
   checks: z.array(CheckEvidence),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
   /** Failure context when the stage throws instead of resolving (#69). */
-  error: z
-    .object({
-      name: z.string().min(1),
-      message: z.string().min(1).max(2_000),
-    })
-    .optional(),
+  error: StageError.optional(),
 });
 export type ImplementationResult = z.infer<typeof ImplementationResult>;
 
@@ -90,6 +97,8 @@ export const VerificationEvidence = z.object({
   checks: z.array(CheckEvidence),
   revision: z.string().min(1),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  /** Failure context when verify() throws (#75). */
+  error: StageError.optional(),
 });
 export type VerificationEvidence = z.infer<typeof VerificationEvidence>;
 
@@ -100,6 +109,8 @@ export const ReviewVerdict = z.object({
   findings: z.array(z.string()),
   revision: z.string().min(1),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  /** Failure context when reviewWorkflow()/submitReview() throws (#75). */
+  error: StageError.optional(),
 });
 export type ReviewVerdict = z.infer<typeof ReviewVerdict>;
 

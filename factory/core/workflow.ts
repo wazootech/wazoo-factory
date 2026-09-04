@@ -12,6 +12,7 @@ import {
   type ChangeRequest,
   type GateAction,
   type Plan,
+  type StageError,
   type WorkflowRecord,
   createWorkflow,
   ImplementationResult,
@@ -129,54 +130,74 @@ export class FactoryWorkflow {
   ) {
     const workflow = await this.require(workflowId);
     if (workflow.idempotency[idempotencyKey]) return workflow;
-    const candidate = await this.github.searchIssues(
-      workflow.request.repository.repository,
-      workflow.request.summary,
-    );
-    // Mirror implement()'s fallback semantics: a plan that names its own
-    // affectedFiles wins; otherwise the analyzer's file list fills the gap so
-    // the executor always gets repo context through plan() → implement(). The
-    // merged value is what gets approved, stored, and digested.
-    const analysisFiles = plan.affectedFiles?.length
-      ? plan.affectedFiles
-      : analysis?.affectedFiles.slice(0, 100);
-    const value = {
-      ...plan,
-      ...(analysisFiles?.length ? { affectedFiles: analysisFiles } : {}),
-      candidateIssues: plan.candidateIssues.length
-        ? plan.candidateIssues
-        : candidate,
-    };
-    const artifactDigest = digestArtifact(value);
-    const loadedApprovals = await this.resolveApprovals(approvals);
-    await this.authorize(
-      workflow,
-      loadedApprovals,
-      "approve-plan",
-      artifactDigest,
-    );
-    await this.authorize(
-      workflow,
-      loadedApprovals,
-      "associate-issues",
-      artifactDigest,
-    );
-    const next = this.transition(workflow, "planned", {
-      plan: { ...value, artifactDigest },
-      idempotency: {
-        ...workflow.idempotency,
-        [idempotencyKey]: artifactDigest,
-      },
-    });
-    await this.store.put(artifactDigest, value);
-    await this.store.saveWorkflow(next, workflow.revision);
-    await this.audit(
-      next,
-      "workflow.planned",
-      workflow.request.requester,
-      artifactDigest,
-    );
-    return next;
+    try {
+      const candidate = await this.github.searchIssues(
+        workflow.request.repository.repository,
+        workflow.request.summary,
+      );
+      // Mirror implement()'s fallback semantics: a plan that names its own
+      // affectedFiles wins; otherwise the analyzer's file list fills the gap
+      // so the executor always gets repo context through plan() → implement().
+      // The merged value is what gets approved, stored, and digested.
+      const analysisFiles = plan.affectedFiles?.length
+        ? plan.affectedFiles
+        : analysis?.affectedFiles.slice(0, 100);
+      const value = {
+        ...plan,
+        ...(analysisFiles?.length ? { affectedFiles: analysisFiles } : {}),
+        candidateIssues: plan.candidateIssues.length
+          ? plan.candidateIssues
+          : candidate,
+      };
+      const artifactDigest = digestArtifact(value);
+      const loadedApprovals = await this.resolveApprovals(approvals);
+      await this.authorize(
+        workflow,
+        loadedApprovals,
+        "approve-plan",
+        artifactDigest,
+      );
+      await this.authorize(
+        workflow,
+        loadedApprovals,
+        "associate-issues",
+        artifactDigest,
+      );
+      const next = this.transition(workflow, "planned", {
+        plan: { ...value, artifactDigest },
+        idempotency: {
+          ...workflow.idempotency,
+          [idempotencyKey]: artifactDigest,
+        },
+      });
+      await this.store.put(artifactDigest, value);
+      await this.store.saveWorkflow(next, workflow.revision);
+      await this.audit(
+        next,
+        "workflow.planned",
+        workflow.request.requester,
+        artifactDigest,
+      );
+      return next;
+    } catch (error) {
+      // #75 strand-proofing: a thrown issue-search or approval error lands a
+      // structured failure record (the plan is the artifact, so the error
+      // rides on it), a failed transition, and a workflow.failed audit instead
+      // of leaving the workflow looking healthy in `requested`. Only when the
+      // workflow is actually mid-planning; a caller invoking plan() against
+      // the wrong stage is a bug and is rethrown untouched.
+      if (workflow.stage !== "requested") throw error;
+      const err = this.failureRecord(error);
+      const failurePlan: Plan = {
+        ...plan,
+        error: err,
+        artifactDigest: this.failureDigest(err),
+      };
+      await this.landFailure(workflow, idempotencyKey, failurePlan, {
+        plan: failurePlan,
+      });
+      throw error;
+    }
   }
 
   async implement(
@@ -217,34 +238,23 @@ export class FactoryWorkflow {
       // `implementing`. A thrown executor error — model-call exhaustion after
       // retries, permission/path refusals — lands a structured failure record
       // with an `error` field, a `failed` transition, and a `workflow.failed`
-      // audit. The idempotency key is marked so a re-invoke returns the failed
-      // workflow instead of double-executing or dying with
-      // `Invalid transition: implementing -> implementing`. The error is
-      // rethrown so the caller still sees the original failure.
-      const name = error instanceof Error ? error.name : "Error";
-      const rawMessage = error instanceof Error ? error.message : String(error);
-      const message = redactSecrets(rawMessage.slice(0, 2_000));
+      // audit (via landFailure(), #75). The idempotency key is marked so a
+      // re-invoke returns the failed workflow instead of double-executing or
+      // dying with `Invalid transition: implementing -> implementing`. The
+      // error is rethrown so the caller still sees the original failure.
+      const err = this.failureRecord(error);
       const failure = ImplementationResult.parse({
         workflowId,
         success: false,
         filesChanged: [],
         revision: workflow.request.repository.baseRevision,
         checks: [],
-        error: { name, message },
-        artifactDigest: digestArtifact({ success: false, name, message }),
+        error: err,
+        artifactDigest: this.failureDigest(err),
       });
-      const next = this.transition(running, "failed", {
+      await this.landFailure(running, idempotencyKey, failure, {
         implementation: failure,
       });
-      next.idempotency[idempotencyKey] = failure.artifactDigest;
-      await this.store.put(failure.artifactDigest, failure);
-      await this.store.saveWorkflow(next, running.revision);
-      await this.audit(
-        next,
-        "workflow.failed",
-        workflow.request.requester,
-        failure.artifactDigest,
-      );
       throw error;
     }
     const implementation = ImplementationResult.parse({
@@ -270,68 +280,122 @@ export class FactoryWorkflow {
     return next;
   }
 
-  async verify(workflowId: string) {
+  async verify(workflowId: string, idempotencyKey = `verify:${workflowId}`) {
     const workflow = await this.require(workflowId);
+    if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.implementation?.success)
       throw new Error("Successful implementation is required");
-    const checks = await this.verification.verify({
-      workflowId,
-      path: workflow.request.repository.worktree,
-      revision: workflow.implementation.revision,
-    });
-    const verification = VerificationEvidence.parse({
-      workflowId,
-      passed: checks.every((check) => check.exitCode === 0),
-      checks: checks.map(redactCheckOutput),
-      revision: workflow.implementation.revision,
-      artifactDigest: digestArtifact(checks),
-    });
-    const next = verification.passed
-      ? this.transition(workflow, "verified", { verification })
-      : this.transition(workflow, "failed", { verification });
-    await this.store.put(verification.artifactDigest, verification);
-    await this.store.saveWorkflow(next, workflow.revision);
-    await this.audit(
-      next,
-      verification.passed ? "workflow.verified" : "workflow.failed",
-      workflow.request.requester,
-      verification.artifactDigest,
-    );
-    return next;
+    try {
+      const checks = await this.verification.verify({
+        workflowId,
+        path: workflow.request.repository.worktree,
+        revision: workflow.implementation.revision,
+      });
+      const verification = VerificationEvidence.parse({
+        workflowId,
+        passed: checks.every((check) => check.exitCode === 0),
+        checks: checks.map(redactCheckOutput),
+        revision: workflow.implementation.revision,
+        artifactDigest: digestArtifact(checks),
+      });
+      const next = verification.passed
+        ? this.transition(workflow, "verified", { verification })
+        : this.transition(workflow, "failed", { verification });
+      next.idempotency[idempotencyKey] = verification.artifactDigest;
+      await this.store.put(verification.artifactDigest, verification);
+      await this.store.saveWorkflow(next, workflow.revision);
+      await this.audit(
+        next,
+        verification.passed ? "workflow.verified" : "workflow.failed",
+        workflow.request.requester,
+        verification.artifactDigest,
+      );
+      return next;
+    } catch (error) {
+      // #75 strand-proofing: a thrown verification error lands a structured
+      // failure record (VerificationEvidence.error), a failed transition, and
+      // a workflow.failed audit instead of leaving the workflow sitting in
+      // `implemented`. Only when the workflow is mid-verification; invoking
+      // verify() against the wrong stage is a caller bug, rethrown untouched.
+      if (workflow.stage !== "implemented") throw error;
+      const err = this.failureRecord(error);
+      const verification = VerificationEvidence.parse({
+        workflowId,
+        passed: false,
+        checks: [],
+        revision: workflow.implementation.revision,
+        error: err,
+        artifactDigest: this.failureDigest(err),
+      });
+      await this.landFailure(workflow, idempotencyKey, verification, {
+        verification,
+      });
+      throw error;
+    }
   }
 
-  async reviewWorkflow(workflowId: string, reviewer: string) {
+  async reviewWorkflow(
+    workflowId: string,
+    reviewer: string,
+    idempotencyKey = `review:${workflowId}`,
+  ) {
     const workflow = await this.require(workflowId);
+    if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.verification?.passed)
       throw new Error("Passing verification is required");
-    const result = await this.review.review({
-      workflowId,
-      path: workflow.request.repository.worktree,
-      revision: workflow.verification.revision,
-      implementer: workflow.request.requester,
-    });
-    if (result.reviewer === workflow.request.requester)
-      throw new Error("Review must be independent");
-    const verdict = ReviewVerdict.parse({
-      workflowId,
-      reviewer,
-      passed: result.passed,
-      findings: result.findings,
-      revision: workflow.verification.revision,
-      artifactDigest: digestArtifact(result),
-    });
-    const next = result.passed
-      ? this.transition(workflow, "reviewed", { review: verdict })
-      : this.transition(workflow, "failed", { review: verdict });
-    await this.store.put(verdict.artifactDigest, verdict);
-    await this.store.saveWorkflow(next, workflow.revision);
-    await this.audit(
-      next,
-      result.passed ? "workflow.reviewed" : "workflow.failed",
-      reviewer,
-      verdict.artifactDigest,
-    );
-    return next;
+    try {
+      const result = await this.review.review({
+        workflowId,
+        path: workflow.request.repository.worktree,
+        revision: workflow.verification.revision,
+        implementer: workflow.request.requester,
+      });
+      if (result.reviewer === workflow.request.requester)
+        throw new Error("Review must be independent");
+      const verdict = ReviewVerdict.parse({
+        workflowId,
+        reviewer,
+        passed: result.passed,
+        findings: result.findings,
+        revision: workflow.verification.revision,
+        artifactDigest: digestArtifact(result),
+      });
+      const next = result.passed
+        ? this.transition(workflow, "reviewed", { review: verdict })
+        : this.transition(workflow, "failed", { review: verdict });
+      next.idempotency[idempotencyKey] = verdict.artifactDigest;
+      await this.store.put(verdict.artifactDigest, verdict);
+      await this.store.saveWorkflow(next, workflow.revision);
+      await this.audit(
+        next,
+        result.passed ? "workflow.reviewed" : "workflow.failed",
+        reviewer,
+        verdict.artifactDigest,
+      );
+      return next;
+    } catch (error) {
+      // #75 strand-proofing: a thrown reviewer error — or a reviewer that
+      // fails independence — lands a structured failure record
+      // (ReviewVerdict.error), a failed transition, and a workflow.failed
+      // audit instead of leaving the workflow sitting in `verified`. Only when
+      // the workflow is mid-review; invoking reviewWorkflow() against the
+      // wrong stage is a caller bug, rethrown untouched.
+      if (workflow.stage !== "verified") throw error;
+      const err = this.failureRecord(error);
+      const verdict = ReviewVerdict.parse({
+        workflowId,
+        reviewer,
+        passed: false,
+        findings: [],
+        revision: workflow.verification.revision,
+        error: err,
+        artifactDigest: this.failureDigest(err),
+      });
+      await this.landFailure(workflow, idempotencyKey, verdict, {
+        review: verdict,
+      });
+      throw error;
+    }
   }
 
   async submitReview(
@@ -342,34 +406,62 @@ export class FactoryWorkflow {
       findings: string[];
       revision: string;
     },
+    idempotencyKey = `submit-review:${workflowId}`,
   ) {
     const workflow = await this.require(workflowId);
+    if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.verification?.passed)
       throw new Error("Passing verification is required");
-    if (input.reviewer === workflow.request.requester)
-      throw new Error("Review must be independent");
-    if (input.revision !== workflow.verification.revision)
-      throw new Error("Review revision mismatch");
-    const verdict = ReviewVerdict.parse({
-      workflowId,
-      reviewer: input.reviewer,
-      passed: input.passed,
-      findings: input.findings,
-      revision: input.revision,
-      artifactDigest: digestArtifact(input),
-    });
-    const next = input.passed
-      ? this.transition(workflow, "reviewed", { review: verdict })
-      : this.transition(workflow, "failed", { review: verdict });
-    await this.store.put(verdict.artifactDigest, verdict);
-    await this.store.saveWorkflow(next, workflow.revision);
-    await this.audit(
-      next,
-      input.passed ? "workflow.reviewed" : "workflow.failed",
-      input.reviewer,
-      verdict.artifactDigest,
-    );
-    return next;
+    try {
+      if (input.reviewer === workflow.request.requester)
+        throw new Error("Review must be independent");
+      if (input.revision !== workflow.verification.revision)
+        throw new Error("Review revision mismatch");
+      const verdict = ReviewVerdict.parse({
+        workflowId,
+        reviewer: input.reviewer,
+        passed: input.passed,
+        findings: input.findings,
+        revision: input.revision,
+        artifactDigest: digestArtifact(input),
+      });
+      const next = input.passed
+        ? this.transition(workflow, "reviewed", { review: verdict })
+        : this.transition(workflow, "failed", { review: verdict });
+      next.idempotency[idempotencyKey] = verdict.artifactDigest;
+      await this.store.put(verdict.artifactDigest, verdict);
+      await this.store.saveWorkflow(next, workflow.revision);
+      await this.audit(
+        next,
+        input.passed ? "workflow.reviewed" : "workflow.failed",
+        input.reviewer,
+        verdict.artifactDigest,
+      );
+      return next;
+    } catch (error) {
+      // #75 strand-proofing: an invalid review verdict that cannot be recorded
+      // (independence or revision violations) lands a structured failure
+      // record (ReviewVerdict.error), a failed transition, and a
+      // workflow.failed audit instead of leaving the workflow sitting in
+      // `verified`. Only when the workflow is mid-review; invoking
+      // submitReview() against the wrong stage is a caller bug, rethrown
+      // untouched.
+      if (workflow.stage !== "verified") throw error;
+      const err = this.failureRecord(error);
+      const verdict = ReviewVerdict.parse({
+        workflowId,
+        reviewer: input.reviewer,
+        passed: false,
+        findings: [],
+        revision: workflow.verification.revision,
+        error: err,
+        artifactDigest: this.failureDigest(err),
+      });
+      await this.landFailure(workflow, idempotencyKey, verdict, {
+        review: verdict,
+      });
+      throw error;
+    }
   }
 
   async createDraftPullRequest(
@@ -438,6 +530,43 @@ export class FactoryWorkflow {
     const workflow = await this.store.getWorkflow(id);
     if (!workflow) throw new Error(`Unknown workflow: ${id}`);
     return workflow;
+  }
+
+  /** #75: shape a thrown error into a redacted, capped stage error record. */
+  private failureRecord(error: unknown): StageError {
+    const name = error instanceof Error ? error.name : "Error";
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    return { name, message: redactSecrets(rawMessage.slice(0, 2_000)) };
+  }
+
+  /** Digest for a failure record; mirrors implement()'s `{ success: false }`. */
+  private failureDigest(error: StageError): string {
+    return digestArtifact({ success: false, ...error });
+  }
+
+  /**
+   * #75 strand-proofing: persist a thrown stage error as a failed transition
+   * with a structured artifact, a workflow.failed audit, and a marked
+   * idempotency key. Callers rethrow the original error afterwards so the
+   * failure still propagates; the invariant is that a workflow is never left
+   * in a mid-stage state that a retry cannot advance (mirrors implement()).
+   */
+  private async landFailure(
+    workflow: WorkflowRecord,
+    idempotencyKey: string,
+    artifact: { artifactDigest: string },
+    fields: Partial<WorkflowRecord>,
+  ): Promise<void> {
+    const next = this.transition(workflow, "failed", fields);
+    next.idempotency[idempotencyKey] = artifact.artifactDigest;
+    await this.store.put(artifact.artifactDigest, artifact);
+    await this.store.saveWorkflow(next, workflow.revision);
+    await this.audit(
+      next,
+      "workflow.failed",
+      workflow.request.requester,
+      artifact.artifactDigest,
+    );
   }
   private transition(
     workflow: WorkflowRecord,

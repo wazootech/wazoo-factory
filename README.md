@@ -80,8 +80,9 @@ Requires Node.js 24+.
 The Eve agent uses DeepSeek's official API for inference (`deepseek-v4-flash`
 at `https://api.deepseek.com`) and Vercel Sandbox for isolated execution. Set
 `DEEPSEEK_API_KEY` before running `pnpm dev`; `CLASSIFIER_MODEL`,
-`ANALYZER_MODEL`, and `FACTORY_EXECUTOR_MODEL` escape-hatch onto a different
-model without code changes. Link the repository to a Vercel project for the
+`ANALYZER_MODEL`, `REVIEWER_MODEL`, and `FACTORY_EXECUTOR_MODEL`
+escape-hatch onto a different model without code changes (per-stage
+`*_BASE_URL` overrides point a stage at another OpenAI-compatible endpoint). Link the repository to a Vercel project for the
 sandbox; local development creates the same hosted sandbox backend used in
 production. Sandbox egress is restricted to GitHub and npm registries for
 repository and dependency operations. Keep the key in the app runtime
