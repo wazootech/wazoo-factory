@@ -415,6 +415,60 @@ describe("FactoryPipeline", () => {
     );
   });
 
+  it("re-reports a strand-proofed plan failure on replay instead of marching on (#75)", async () => {
+    const pipeline = new FactoryPipeline(
+      deps({
+        approvals: {
+          ...approvals(),
+          plan: async () => [],
+        },
+      }),
+    );
+    const first = await pipeline.run(request, issue);
+    expect(first.ok).toBe(false);
+    if (first.ok) return;
+    expect(first.stage).toBe("plan");
+    expect(first.workflow?.stage).toBe("failed");
+
+    // A re-invoked run replays the failed plan via its deterministic
+    // idempotency key and halts with the recorded error instead of minting
+    // approvals against the failure digest and dying in implement().
+    const replay = await pipeline.run(request, issue);
+    expect(replay.ok).toBe(false);
+    if (replay.ok) return;
+    expect(replay.stage).toBe("plan");
+    expect(replay.error.message).toContain("Missing approval: approve-plan");
+    expect(replay.workflow?.stage).toBe("failed");
+  });
+
+  it("halts with the verify stage when verification checks fail", async () => {
+    const pipeline = new FactoryPipeline(
+      deps({
+        workflow: new FactoryWorkflow(
+          new MemoryWorkflowStore(),
+          new FakeWorkspace(),
+          new FakeGitHub(),
+          sandbox(),
+          {
+            async verify() {
+              return [{ name: "test", exitCode: 1, output: "failing" }];
+            },
+          },
+          reviewAdapter,
+          "test-secret",
+        ),
+      }),
+    );
+    const outcome = await pipeline.run(request, issue);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    // A failed verification halts here with the honest stage instead of
+    // running the reviewer against an unverified change.
+    expect(outcome.stage).toBe("verify");
+    expect(outcome.workflow?.stage).toBe("failed");
+    expect(outcome.workflow?.verification?.passed).toBe(false);
+  });
+
   it("halts with the review stage when the reviewer core never complies", async () => {
     const pipeline = new FactoryPipeline(
       deps({

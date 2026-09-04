@@ -132,6 +132,28 @@ describe("reviewImplementation", () => {
     expect(result.passed).toBe(false);
   });
 
+  it("forces passed=false when a finding is error/critical despite the model (#77 review)", async () => {
+    // Model contradiction: claims the change passes while flagging an error.
+    const generate = okGenerate({
+      ...validReview,
+      passed: true,
+      findings: [
+        {
+          file: "src/parser.ts",
+          line: 42,
+          severity: "error",
+          message: "Empty-buffer guard never runs: early return is unreachable",
+        },
+      ],
+    });
+    const result = await reviewImplementation(
+      makeDeps({ generate }),
+      baseInput,
+    );
+    expect(result.passed).toBe(false);
+    expect(result.findings[0]?.severity).toBe("error");
+  });
+
   it("exports a defineTool-shaped review_implementation with lazy live deps", () => {
     expect(typeof reviewImplementationTool.description).toBe("string");
     expect(reviewImplementationTool.description.length).toBeGreaterThan(10);

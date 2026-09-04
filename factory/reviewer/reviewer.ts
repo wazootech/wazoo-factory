@@ -60,6 +60,19 @@ export async function reviewImplementation(
     try {
       const payload = await deps.generate({ system, prompt });
       const review = ReviewOutput.parse(payload);
+      // LLM trust boundary (#77 review): the system prompt requires any
+      // error/critical finding to fail the review. Enforce that policy
+      // deterministically so a model contradiction (passed: true alongside a
+      // blocking finding) can never reach the stored verdict, which the
+      // workflow treats as authority for creating the draft PR.
+      if (
+        review.findings.some(
+          (finding) =>
+            finding.severity === "error" || finding.severity === "critical",
+        )
+      ) {
+        review.passed = false;
+      }
       return {
         ...review,
         model: deps.model,

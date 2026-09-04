@@ -8,6 +8,13 @@ import {
   type PipelineIssueInput,
 } from "@/factory/core/pipeline.ts";
 import { createLazyLiveDeps as createLazyLiveClassifierDeps } from "@/factory/classifier/classifier.ts";
+import {
+  BODY_CAP,
+  DESCRIPTION_CAP,
+  LABEL_CAP,
+  REPOSITORY_CAP,
+  TITLE_CAP,
+} from "@/factory/classifier/schema.ts";
 import { createLazyLiveDeps as createLazyLiveAnalyzerDeps } from "@/factory/analyzer/analyzer.ts";
 import { createLazyLiveDeps as createLazyLiveReviewerDeps } from "@/factory/reviewer/reviewer.ts";
 import {
@@ -35,21 +42,25 @@ const liveDeps = {
   review: createLazyLiveReviewerDeps(),
 };
 
+// The classifier is the first pipeline stage, so its ingestion caps are the
+// pipeline's input contract (mirroring the webhook's clamps). Accepting more
+// here would only make the classifier retry-and-fail on parse for inputs that
+// can never pass — cap at the same limits up front.
 const inputSchema = z.object({
   // Change request (requester is filled from the session).
   workflowId: z.string().min(1).max(200),
   summary: z.string().min(1).max(10_000),
-  repository: z.string().min(1).max(200),
+  repository: z.string().min(1).max(REPOSITORY_CAP),
   baseBranch: z.string().min(1).max(200).default("main"),
   worktree: z.string().min(1),
   baseRevision: z.string().min(1),
   createdAt: z.string().datetime().optional(),
-  // Classified issue.
+  // Classified issue (caps mirror ClassificationInput's ingestion limits).
   issueNumber: z.number().int().positive(),
-  title: z.string().min(1).max(500),
-  body: z.string().max(10_000).default(""),
-  labels: z.array(z.string().max(100)).default([]),
-  repositoryDescription: z.string().max(500).default(""),
+  title: z.string().min(1).max(TITLE_CAP),
+  body: z.string().max(BODY_CAP).default(""),
+  labels: z.array(z.string().max(LABEL_CAP)).default([]),
+  repositoryDescription: z.string().max(DESCRIPTION_CAP).default(""),
   url: z.string().url(),
 });
 

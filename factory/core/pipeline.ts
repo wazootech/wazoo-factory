@@ -222,6 +222,18 @@ export class FactoryPipeline {
         undefined,
         { affectedFiles: analysis.affectedFiles },
       );
+      // #75: a strand-proofed plan failure (issue-search or approval error)
+      // returns a `failed` workflow on replay via its idempotency key. Halt
+      // here with the recorded error instead of marching into implement(),
+      // which would mint approvals against the failure digest and die on
+      // `Invalid transition: failed -> implementing`.
+      if (current.stage === "failed") {
+        return halt(
+          "plan",
+          new Error(current.plan?.error?.message ?? "plan was not approved"),
+          current,
+        );
+      }
 
       // 4. Implement through the workflow (executor + checks + one repair).
       stage = "implement";
@@ -261,6 +273,19 @@ export class FactoryPipeline {
       // 5. Verify (deterministic checks over the implemented worktree).
       stage = "verify";
       current = await workflow.verify(request.id);
+      // #75: a failed verification (checks failing or a strand-proofed throw
+      // replayed via the idempotency key) returns a `failed` workflow. Halt
+      // here instead of running the reviewer against an unverified change.
+      if (current.stage === "failed") {
+        return halt(
+          "verify",
+          new Error(
+            current.verification?.error?.message ??
+              "verification checks failed",
+          ),
+          current,
+        );
+      }
 
       // 6. Review → ReviewVerdict (independent reviewer agent core).
       stage = "review";
