@@ -8,6 +8,7 @@ import {
   ImplementationOutput,
   type CheckResult,
 } from "../implementer/schema.ts";
+import { capReviewChanges } from "../reviewer/schema.ts";
 import type {
   DraftPullRequest,
   IssueAssociation,
@@ -26,6 +27,12 @@ export interface TaskSpec {
 export interface ExecutionResult {
   success: boolean;
   filesChanged: string[];
+  /** #78: post-edit contents of filesChanged, collected from the edit batches
+   *  actually written to the sandbox (last write wins across the implement
+   *  and its single repair). Capped via capReviewChanges so the persisted
+   *  artifact and the review context stay bounded. Absent on legacy paths
+   *  whose executors never wrote through this protocol. */
+  changes?: Array<{ path: string; content: string }>;
   checksRun: Array<{ name: string; exitCode: number; output?: string }>;
   summary?: string;
   interrupted?: boolean;
@@ -767,6 +774,11 @@ export class EveNativeExecutor implements Executor {
       this.options.phaseTimeoutMs ?? DEFAULT_EXECUTOR_PHASE_TIMEOUT_MS;
     const generate = await this.generate();
     const filesChanged: string[] = [];
+    // Final post-edit contents per changed file (#78): applyBatch records the
+    // full content of every write, keyed by the same normalized relative path
+    // filesChanged uses, so the review can judge exactly what the sandbox
+    // holds after the implement and its single repair attempt.
+    const contents = new Map<string, string>();
     const checksRun: CheckResult[] = [];
 
     // Phase 1: the model produces an edit batch; apply it in the sandbox.
@@ -777,7 +789,12 @@ export class EveNativeExecutor implements Executor {
       [],
       attempts,
     );
-    await this.applyBatch(implement.files, workspacePath, filesChanged);
+    await this.applyBatch(
+      implement.files,
+      workspacePath,
+      filesChanged,
+      contents,
+    );
     let summary = implement.summary;
     let passed = await this.runChecks(
       checks,
@@ -801,7 +818,12 @@ export class EveNativeExecutor implements Executor {
         failing,
         attempts,
       );
-      await this.applyBatch(repair.files, workspacePath, filesChanged);
+      await this.applyBatch(
+        repair.files,
+        workspacePath,
+        filesChanged,
+        contents,
+      );
       if (repair.summary) summary = repair.summary;
       // Each repair attempt gets its own phase budget.
       passed = await this.runChecks(
@@ -827,7 +849,7 @@ export class EveNativeExecutor implements Executor {
     }
 
     // #68: ImplementationOutput must validate against the real run results.
-    return ImplementationOutput.parse({
+    const output = ImplementationOutput.parse({
       success: passed,
       filesChanged,
       checksRun,
@@ -835,6 +857,10 @@ export class EveNativeExecutor implements Executor {
       interrupted: false,
       resumed: false,
     });
+    const changes = capReviewChanges(
+      [...contents].map(([path, content]) => ({ path, content })),
+    );
+    return { ...output, ...(changes.length ? { changes } : {}) };
   }
 
   private async requestEdits(
@@ -896,6 +922,7 @@ export class EveNativeExecutor implements Executor {
     edits: readonly { path: string; content: string }[],
     workspacePath: string,
     filesChanged: string[],
+    contents: Map<string, string>,
   ) {
     // Resolve every path before the first write (#70 review): a mid-batch
     // escape must not leave earlier edits applied and the run half-aborted.
@@ -914,6 +941,9 @@ export class EveNativeExecutor implements Executor {
         ? edit.path.slice(2)
         : edit.path;
       if (!filesChanged.includes(relative)) filesChanged.push(relative);
+      // Last write wins: a repair overwriting a file replaces the content the
+      // reviewer will judge, matching the sandbox's post-edit state.
+      contents.set(relative, edit.content);
     }
   }
 

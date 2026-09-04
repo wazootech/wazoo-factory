@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { REVIEW_MAX_CHANGES, ReviewChange } from "../reviewer/schema.ts";
 
 export const WorkflowStage = z.enum([
   "requested",
@@ -83,6 +84,10 @@ export const ImplementationResult = z.object({
   workflowId: Identifier,
   success: z.boolean(),
   filesChanged: z.array(z.string().min(1)),
+  /** #78: post-edit contents of filesChanged, capped by the executor so the
+   *  persisted artifact and the review context stay bounded. The reviewer
+   *  judges this source; a record without it cannot be meaningfully reviewed. */
+  changes: z.array(ReviewChange).max(REVIEW_MAX_CHANGES).optional(),
   revision: z.string().min(1),
   checks: z.array(CheckEvidence),
   artifactDigest: z.string().regex(/^[a-f0-9]{64}$/),

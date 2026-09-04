@@ -12,6 +12,7 @@ import {
   ImplementationOutput,
   type ImplementationTask,
 } from "@/factory/implementer/schema.ts";
+import { REVIEW_CHANGE_CONTENT_CAP } from "@/factory/reviewer/schema.ts";
 import implementTaskTool from "@/agent/tools/implement_task.ts";
 
 // #68 executor unit tests: injected sandbox fakes drive the executor with
@@ -121,6 +122,11 @@ describe("EveNativeExecutor (#68)", () => {
     expect(result.checksRun.every((check) => check.exitCode === 0)).toBe(true);
     expect(generate).toHaveBeenCalledTimes(1);
     expectValid(result);
+    // #78: the result carries the post-edit source it wrote, so the review
+    // can judge the actual change without re-entering the sandbox.
+    expect(result.changes).toEqual([
+      { path: "src/tracer.ts", content: "export const trace = () => {};\n" },
+    ]);
     // No affected files were requested, so nothing is read from the sandbox.
     expect(sandbox.readTextFile).not.toHaveBeenCalled();
 
@@ -146,6 +152,29 @@ describe("EveNativeExecutor (#68)", () => {
     expect(call.prompt).toContain("## Working directory");
     expect(call.prompt).toContain("## Deliverable");
     expect(call.prompt).not.toContain("## Repair");
+  });
+
+  it("caps oversized carried source so the review context stays bounded (#78)", async () => {
+    const { sandbox } = makeSandbox();
+    const huge = "a".repeat(REVIEW_CHANGE_CONTENT_CAP + 500);
+    const generate = vi.fn(async (_params: GenerateParams) =>
+      editBatch("src/tracer.ts", huge),
+    );
+    const executor = makeExecutor(sandbox, generate);
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    expect(result.success).toBe(true);
+    expect(result.filesChanged).toEqual(["src/tracer.ts"]);
+    // The head of the file survives and the marker says it was cut; the model
+    // never silently reviews a file it believes is whole.
+    const carried = result.changes?.[0];
+    expect(carried?.content.length).toBeLessThanOrEqual(
+      REVIEW_CHANGE_CONTENT_CAP,
+    );
+    expect(carried?.content.startsWith("a".repeat(100))).toBe(true);
+    expect(carried?.content).toContain("truncated for review context");
+    expectValid(result);
   });
 
   it("parses non-zero exit codes and combined output from sandbox runs", async () => {
@@ -234,6 +263,14 @@ describe("EveNativeExecutor (#68)", () => {
     expect(result.filesChanged).toEqual(["src/tracer.ts"]); // deduped across attempts
     expect(result.checksRun).toHaveLength(6); // full suite on both attempts
     expectValid(result);
+    // #78: the carried source is the final post-repair content, not the
+    // superseded first batch.
+    expect(result.changes).toEqual([
+      {
+        path: "src/tracer.ts",
+        content: "export const trace = (frame: unknown) => frame;\n",
+      },
+    ]);
 
     // The repair call is told exactly which checks failed and why.
     const repair = generate.mock.calls[1]![0] as {

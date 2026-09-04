@@ -9,18 +9,35 @@ import {
   REVIEWER_DEFAULT_MODEL,
   type ReviewerDeps,
 } from "@/factory/reviewer/reviewer.ts";
-import { ReviewOutput } from "@/factory/reviewer/schema.ts";
+import {
+  ReviewOutput,
+  capReviewChanges,
+  REVIEW_CHANGE_CONTENT_CAP,
+  REVIEW_CHANGE_TOTAL_CAP,
+} from "@/factory/reviewer/schema.ts";
 import reviewImplementationTool from "@/agent/tools/review_implementation.ts";
 
 // Reviewer unit tests (#76): injected generate fakes drive structured
 // findings and risk assessment. No real model is touched; the live DeepSeek
 // seam is exercised nowhere here.
 
+// #78: the reviewer input always carries the post-edit source it judges.
 const baseInput = {
   workflowId: "workflow-review",
   repository: "wazootech/memsdk",
   revision: "abc123",
   filesChanged: ["src/parser.ts"],
+  changes: [
+    {
+      path: "src/parser.ts",
+      content: [
+        "export function parseFrame(buffer: Uint8Array): Frame {",
+        "  if (buffer.length === 0) throw new Error('empty frame');",
+        "  return decode(buffer);",
+        "}",
+      ].join("\n"),
+    },
+  ],
   implementationSummary: "Guard the frame parser against empty buffers.",
   implementer: "implementer",
 };
@@ -118,6 +135,28 @@ describe("reviewImplementation", () => {
     expect(delays).toEqual([250]);
   });
 
+  it("requires the change source and never calls the model without it (#78)", async () => {
+    const generate = okGenerate();
+    const { changes: _omitted, ...withoutSource } = baseInput;
+    await expect(
+      reviewImplementation(makeDeps({ generate }), withoutSource),
+    ).rejects.toThrow(/changes/);
+    // Deterministic "no code, no review": the model is never consulted.
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("exposes the change source to the model prompt (#78)", async () => {
+    const generate = okGenerate();
+    await reviewImplementation(makeDeps({ generate }), baseInput);
+    const call = generate.mock.calls[0]![0] as {
+      system: string;
+      prompt: string;
+    };
+    expect(call.prompt).toContain("## Changed Source");
+    expect(call.prompt).toContain("### src/parser.ts");
+    expect(call.prompt).toContain("throw new Error('empty frame')");
+  });
+
   it("rejects a non-independent reviewer result", async () => {
     const generate = okGenerate({
       ...validReview,
@@ -208,6 +247,39 @@ describe("live reviewer env resolution", () => {
       model: "anthropic/claude-haiku-4",
       baseURL: "https://gateway.example.com/v1",
     });
+  });
+
+  it("caps oversized change contents with an explicit truncation marker", () => {
+    const big = "a".repeat(REVIEW_CHANGE_CONTENT_CAP + 500);
+    const [capped] = capReviewChanges([{ path: "src/big.ts", content: big }]);
+    expect(capped?.content.length).toBeLessThanOrEqual(
+      REVIEW_CHANGE_CONTENT_CAP,
+    );
+    // The head survives and the model is told the file was cut.
+    expect(capped?.content.startsWith("a".repeat(100))).toBe(true);
+    expect(capped?.content).toContain("truncated for review context");
+  });
+
+  it("drops whole files past the aggregate cap with a visible omission marker", () => {
+    const changes = Array.from({ length: 20 }, (_, i) => ({
+      path: `src/file-${i}.ts`,
+      content: "x".repeat(REVIEW_CHANGE_TOTAL_CAP / 10),
+    }));
+    const capped = capReviewChanges(changes);
+    const total = capped.reduce(
+      (sum, change) => sum + change.content.length,
+      0,
+    );
+    expect(total).toBeLessThanOrEqual(REVIEW_CHANGE_TOTAL_CAP + 200);
+    // The review is told how much it is not seeing rather than judging less
+    // code silently.
+    const omitted = capped.find((change) => change.path === "<omitted>");
+    expect(omitted?.content).toMatch(/more changed file\(s\) omitted/);
+  });
+
+  it("passes already-capped changes through idempotently", () => {
+    const changes = [{ path: "src/a.ts", content: "short" }];
+    expect(capReviewChanges(changes)).toEqual(changes);
   });
 
   it("keeps the ReviewOutput schema parseable as the embedded JSON contract", () => {

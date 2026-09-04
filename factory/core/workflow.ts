@@ -261,6 +261,9 @@ export class FactoryWorkflow {
       workflowId,
       success: result.success,
       filesChanged: result.filesChanged,
+      // #78: carry the post-edit source so the reviewer (and any later stage)
+      // can judge the actual change without re-entering the sandbox.
+      changes: result.changes,
       revision: workflow.request.repository.baseRevision,
       checks: result.checksRun.map(redactCheckOutput),
       artifactDigest: digestArtifact(result),
