@@ -1,0 +1,127 @@
+{
+  "generatedAt": "2026-09-04T00:00:00.000Z",
+  "goldSource": "provisional-agent-proposal-2026-09-04",
+  "cases": [
+    {
+      "id": "wazoo-api-38",
+      "repository": "wazootech/wazoo-api",
+      "issueNumber": 38,
+      "title": "Wire worldsAdminClient into users.ts account-deletion route",
+      "body": "## Context\n\nPR [#37](https://github.com/wazootech/wazoo-api/pull/37) added `@/lib/worlds-client.ts` with a `worldsAdminClient` helper and `worldsApiErrorDetail` extractor. The account-deletion route in `src/routes/users.ts` still uses raw fetch calls and should be migrated to the generated client.\n\n## Review comment\n\n[r3818212434](https://github.com/wazootech/wazoo-api/pull/37/changes#r3818212434) on `src/routes/users.ts:11` suggests:\n\n```typescript\nimport { db, id, now } from \"@/lib/db\";\nimport { isAdmin, requireScope, respond } from \"@/lib/http\";\nimport { UserSchema } from \"../lib/schemas\";\nimport { deleteNamespaceWorlds } from \"@worlds/client\";\nimport { worldsAdminClient } from \"@/lib/worlds-client\";\n```\n\n## Scope\n\nReplace the hand-rolled `fetch` calls in the account-deletion handler with `worldsAdminClient(env).worlds.deleteNamespace(...)` (or the equivalent `deleteNamespaceWorlds` call), using `worldsApiErrorDetail` for error extraction. Also align the import style with the `@/` path alias convention per [workspace#24](https://github.com/wazootech/workspace/issues/24).\n\n## Blocked on\n\nPR [#37](https://github.com/wazootech/wazoo-api/pull/37) merge (provides the `worldsAdminClient` helper).",
+      "url": "https://github.com/wazootech/wazoo-api/issues/38",
+      "legacyLabels": [
+        "wayfinder:task"
+      ],
+      "classification": {
+        "category": "feature",
+        "confidence": 0.85
+      },
+      "gold": {
+        "affectedFiles": [
+          "src/routes/users.ts",
+          "src/lib/worlds-client.ts"
+        ],
+        "riskLevel": "low",
+        "estimatedComplexity": "simple",
+        "specRubric": "Migration must replace the raw fetch calls in the account-deletion handler with worldsAdminClient(env).worlds.deleteNamespace(...) (or deleteNamespaceWorlds), use worldsApiErrorDetail for error extraction, and align imports to the @/ alias convention; the deletion flow authz must stay unchanged.",
+        "probeRubric": "Probes should verify the route no longer hand-rolls fetch to worlds endpoints, that error extraction uses worldsApiErrorDetail, and that the @/ import alias convention is applied."
+      }
+    },
+    {
+      "id": "sparql-engine-185",
+      "repository": "wazootech/sparql-engine",
+      "issueNumber": 185,
+      "title": "Fix termKey literal delimiter ambiguity (collision on literal values containing |)",
+      "body": "## Bug\n`termKey` (`src/term/identity.ts`) serializes literals as `` literal:<value>|<lang>|<direction>|<datatype> ``. `<value>` is unbounded and unescaped, so distinct literals collide:\n\n- `\"a|b\"` (no lang) â†’ `literal:a|b||`\n- `\"a\"` lang `b` â†’ `literal:a|b||`\n\n## Impact\n`termKey` is the primary-key basis for the worlds-sqlite and worlds-indexeddb quad tables (`okey` column / `quadKey` composite). A collision maps two distinct quads onto one key â†’ store corruption (silent overwrite / dedup failure).\n\n## Fix\nEscape `|` and `\\` in term values (or length-prefix each field), keeping `termKey` injective. Add regression tests for values containing `|`, `\\`, and cross-field ambiguity (value vs lang/datatype).\n\n## Related\nQuad IDs (worlds-sdk-ts #187) are moving to canonical N-Quads hashing, which eliminates this ambiguity for IDs â€” but termKey remains in use as the term-keyed composite PK in the sqlite/indexeddb stores, so this fix is still required.",
+      "url": "https://github.com/wazootech/sparql-engine/issues/185",
+      "legacyLabels": [
+        "bug"
+      ],
+      "classification": {
+        "category": "bug",
+        "confidence": 0.95
+      },
+      "gold": {
+        "affectedFiles": [
+          "src/term/identity.ts"
+        ],
+        "riskLevel": "medium",
+        "estimatedComplexity": "simple",
+        "specRubric": "termKey serialization must become injective by escaping the pipe and backslash characters in term values (or length-prefixing fields), with regression tests for values containing both and cross-field ambiguity; existing stored keys must not silently collide or corrupt reads.",
+        "probeRubric": "Probes should check that distinct literals produce distinct termKeys (e.g. value \"a|b\" with no lang vs value \"a\" with lang b) and that round-tripping escaped values recovers the original."
+      }
+    },
+    {
+      "id": "wazoo-console-68",
+      "repository": "wazootech/wazoo-console",
+      "issueNumber": 68,
+      "title": "Extend quota error banner to usage and billing limit errors",
+      "body": "## Summary\n\nThe create-world dialog now renders a dedicated quota banner when world\ncreation fails with `429 DATABASE_LIMIT_REACHED` â€” showing the usage\npercentage and a \"delete unused worlds or raise the database limit\" hint\n(see #67). Extend the same pattern to other limit errors across the\nconsole so capacity problems are always explained consistently.\n\n## What exists today\n\n- `create-world-dialog.tsx` detects `error.code === \"DATABASE_LIMIT_REACHED\"`\n  and renders `quota.usagePercent` + an actionable hint.\n- The platform API returns 429 quota-style errors shaped as\n  `{ error: { code, message }, quota: { state, reason?, usagePercent? } }`\n  (wazoo-api), and `@wazoo/client` 0.1.5 types that payload.\n\n## Goal\n\n1. Extract the banner into a reusable component (e.g. `QuotaErrorBanner`)\n   so one pattern is used everywhere.\n2. Apply it to other quota/limit surfaces, at minimum:\n   - **Usage limits** â€” usage page / usage-based failures.\n   - **Billing** â€” plan caps (world count, storage, API volume).\n3. Consistent copy across surfaces: what's exceeded, current usage vs\n   limit when available, and the concrete remedy (raise the limit, upgrade,\n   or free up capacity).\n\n## Acceptance criteria\n\n- One shared banner component renders quota payloads consistently.\n- All quota/limit error surfaces in the console use it (no ad-hoc messages).\n- Unknown/unexpected error shapes degrade gracefully to the existing\n  generic message.\n\n## Out of scope\n\n- Server-side quota enforcement changes (API side only).",
+      "url": "https://github.com/wazootech/wazoo-console/issues/68",
+      "legacyLabels": [
+        "enhancement"
+      ],
+      "classification": {
+        "category": "feature",
+        "confidence": 0.8
+      },
+      "gold": {
+        "affectedFiles": [
+          "src/components/create-world-dialog.tsx"
+        ],
+        "riskLevel": "low",
+        "estimatedComplexity": "moderate",
+        "specRubric": "Extract the existing quota banner from create-world-dialog.tsx into a shared QuotaErrorBanner component, apply it to usage-limit and billing-limit surfaces, keep copy consistent (what is exceeded, current vs limit, remedy), and degrade unknown shapes to the generic message.",
+        "probeRubric": "Probes should verify the banner is extracted into one reusable component, that quota/limit surfaces render it (no ad-hoc messages), and that unknown error shapes fall back to the generic message."
+      }
+    },
+    {
+      "id": "worlds-api-46",
+      "repository": "wazootech/worlds-api",
+      "issueNumber": 46,
+      "title": "Abort in-flight SPARQL queries on client disconnect (wire SparqlRequest.signal in /worlds/:id/sparql)",
+      "body": "**Wire `SparqlRequest.signal` into `/worlds/{id}/sparql` so an in-flight SPARQL query is aborted when the client disconnects.**\n\n### Why\n\nThe route today races the query against a server-side timer and never reacts to the client going away:\n\n- `src/routes/sparql.ts` calls `withTimeout(client.sparql({ query: body.query }), sparqlTimeoutMs(env))`.\n- `withTimeout` rejects the route's promise at the deadline (`QUERY_TIMEOUT`), but **the underlying Comunica evaluation keeps running to completion** â€” the wasted Worker CPU and libsql reads outlive the timeout.\n- On **client disconnect there is no abort at all**: the query burns a Worker concurrency slot until it finishes or times out, even though the response can never be delivered. With per-key rate limiting (#39) and the beta's abuse layer, a disconnected long query is exactly the case that starves real traffic.\n\n### The mechanism now exists â€” this is just the missing link\n\n- `SparqlRequest.signal?: AbortSignal` landed via sparql-engine #122 (engine enforcement + per-boundary checks) and worlds-client-ts #159.\n- `Client.sparql(request)` forwards the whole request to `sparqlEngine.execute(request)` unchanged, and `ComunicaSparqlEngine.executeSparql` already races `request.signal` against the timeout (first wins, rejects with the signal's reason).\n- The route never passes a signal, so none of that fires from the API. The fetch `Request` in Hono (`c.req.raw.signal`) already aborts when the client disconnects â€” it just needs forwarding.\n\n**Prerequisite:** worlds-api pins `@jsr/worlds__client@0.0.18` (`node_modules/@jsr/worlds__client`), whose installed `SparqlRequest` has only `timeoutMs` â€” no `signal`. Bump to a release containing the #159 change (and `@jsr/worlds__libsql` if it needs the matching client) before wiring.\n\n### What to do â€” route layer (worlds-api)\n\n1. Bump `@jsr/worlds__client` (and `@jsr/worlds__libsql` as needed) to a version with `SparqlRequest.signal`.\n2. In `/worlds/{id}/sparql`, pass the disconnect signal and the env-configurable timeout into the request, and drop the route-level `withTimeout` race so the engine's single composed controller owns both:\n   `client.sparql({ query: body.query, signal: c.req.raw.signal, timeoutMs: sparqlTimeoutMs(env) })`.\n   The engine already rejects with the exact `\"SPARQL query timed out\"` message and clears its timer on completion â€” behavior parity with today's `QUERY_TIMEOUT`, one less manual race, and the abort path for free. (Alternative if we want to keep the route's timer as a hard server-side cap: keep `withTimeout` but *also* forward the signal; first rejection wins.)\n3. Handle the abort case explicitly: when `c.req.raw.signal` fires, the response cannot be delivered â€” catch the abort rejection and return without serializing a body, rather than writing a pointless 400/500 to a dead connection.\n\n### What to do â€” cancellation layer (worlds-libsql)\n\nForwarding the signal makes `executeSparql` **reject promptly**, but it does **not stop the evalua",
+      "url": "https://github.com/wazootech/worlds-api/issues/46",
+      "legacyLabels": [
+        "wayfinder:task"
+      ],
+      "classification": {
+        "category": "feature",
+        "confidence": 0.75
+      },
+      "gold": {
+        "affectedFiles": [
+          "src/routes/sparql.ts"
+        ],
+        "riskLevel": "medium",
+        "estimatedComplexity": "simple",
+        "specRubric": "The /worlds/:id/sparql route must forward the Hono request abort signal into SparqlRequest.signal so client disconnect cancels the Comunica evaluation instead of burning the concurrency slot; the existing timeout race stays as a backstop.",
+        "probeRubric": "Probes should verify the route passes c.req.raw.signal into the sparql client call and that a disconnected client aborts before the timeout deadline."
+      }
+    },
+    {
+      "id": "linked-markdown-11",
+      "repository": "wazootech/linked-markdown",
+      "issueNumber": 11,
+      "title": "Standardize on idiomatic frontmatter libraries across implementations",
+      "body": "## Motivation\n\nBoth the TypeScript and Python implementations currently handle frontmatter extraction, but with different levels of robustness and dependency on idiomatic libraries.\n\n- **TS** uses `@std/front-matter` (JSR's std lib) â€” robust, handles \\r\\n, BOM, auto-detects JSON/YAML/TOML.\n- **Python** uses a custom regex (`^---(\\w*)\\n(.*?)\\n---`) â€” lightweight but brittle: no \\r\\n support, no BOM handling, no format fallback.\n\nThe goal is to standardize both implementations on idiomatic, well-maintained frontmatter libraries while keeping each repo's codebase lean.\n\n---\n\n## TypeScript â€” Already Done\n\n`src/extract.ts` uses `@std/front-matter` for auto-detecting JSON/YAML/TOML frontmatter with proper fallback (JSON â†’ TOML â†’ YAML). No custom regex. This is the reference for the Python side.\n\n## Python â€” Proposed Change\n\n### Replace custom regex with `python-frontmatter`\n\nThe library [`python-frontmatter`](https://github.com/eyeseast/python-frontmatter) (416 stars, v1.3.0, production-stable) is the Python equivalent of `@std/front-matter`. It:\n\n- Auto-detects YAML, JSON, and TOML frontmatter from delimiters\n- Handles \\r\\n and BOM correctly\n- Returns `(metadata, content)` via `frontmatter.parse(text)`\n- Is well-maintained (latest release May 2026)\n- Supports custom handlers if needed\n\n### Current `extract.py` (custom regex):\n\n```python\n_FRONT_MATTER_RE = re.compile(\n    r\"^---(\\w*)\\n(.*?)\\n---\",\n    re.DOTALL | re.MULTILINE,\n)\n\ndef extract(content: str) -> ExtractResult[dict[str, Any]]:\n    match = _FRONT_MATTER_RE.match(content)\n    ...\n```\n\n### Proposed `extract.py` (using python-frontmatter):\n\n```python\nimport frontmatter\nfrom dataclasses import dataclass\nfrom typing import Any, Generic, TypeVar\n\nT = TypeVar(\"T\")\n\n@dataclass\nclass ExtractResult(Generic[T]):\n    front_matter: str\n    body: str\n    attrs: T\n\ndef extract(content: str) -> ExtractResult[dict[str, Any]]:\n    metadata, body = frontmatter.parse(content)\n    return ExtractResult(\n        front_matter=\"\",\n        body=body,\n        attrs=metadata or {},\n    )\n```\n\n### Dependency change\n\n```toml\n# pyproject.toml\ndependencies = [\n    \"pyyaml>=6.0\",\n    \"python-frontmatter[toml]>=1.3\",\n]\n```\n\n---\n\n## Open Question: How much parse complexity to carry?\n\nThe TS `parse.ts` adds validation on top of extraction:\n- `LmdError` classes (`LMD_MISSING_ID`, `LMD_MISSING_TYPE`)\n- `ParseResult` interface with `@id`/`@type`/`@context`\n- Required field enforcement\n\nThe Python `parse.py` is intentionally minimal â€” just returns `dict[str, Any]`.\n\n**Decision needed**: Should the Python `parse.py` grow to match the TS validation layer, or stay as a thin wrapper around extract? The Python approach is simpler to maintain but drifts from the TS API surface.\n",
+      "url": "https://github.com/wazootech/linked-markdown/issues/11",
+      "legacyLabels": [
+        "enhancement"
+      ],
+      "classification": {
+        "category": "feature",
+        "confidence": 0.85
+      },
+      "gold": {
+        "affectedFiles": [
+          "src/extract.py"
+        ],
+        "riskLevel": "low",
+        "estimatedComplexity": "simple",
+        "specRubric": "Replace the custom regex frontmatter extraction in extract.py with python-frontmatter, matching the TS reference (auto-detect YAML/JSON/TOML, handle CRLF and BOM), and decide explicitly whether parse.py grows to the TS validation layer or stays thin.",
+        "probeRubric": "Probes should verify extract.py no longer contains the custom regex, handles CRLF/BOM and JSON/YAML/TOML, and that existing parse.py behavior (or its documented decision) is preserved."
+      }
+    }
+  ]
+}
