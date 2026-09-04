@@ -101,7 +101,11 @@ describe("analyzeIssue (#67)", () => {
     const prompt = buildAnalyzerUserPrompt({
       ...baseInput,
       classification: { category: "bug" as const, confidence: 0.92 },
-      fileTree: ["src/routes/worlds.ts", "src/routes/users.ts", "src/parser.ts"],
+      fileTree: [
+        "src/routes/worlds.ts",
+        "src/routes/users.ts",
+        "src/parser.ts",
+      ],
     });
     expect(prompt).toContain("## Repository description");
     expect(prompt).toContain("Parser SDK");
@@ -136,10 +140,10 @@ describe("analyzeIssue (#67)", () => {
       () => chunk,
     );
     await expect(
-      analyzeIssue(
-        makeDeps({ generate }),
-        { ...baseInput, fileTree: oversize },
-      ),
+      analyzeIssue(makeDeps({ generate }), {
+        ...baseInput,
+        fileTree: oversize,
+      }),
     ).rejects.toThrow(/exceeds the .*-char layout budget|fileTree/);
     expect(generate).not.toHaveBeenCalled();
   });

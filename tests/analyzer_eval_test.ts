@@ -263,11 +263,7 @@ describe("analyzer eval source-layout capture", () => {
   });
 
   it("sorts and dedupes", () => {
-    const pruned = pruneFileTreePaths([
-      "src/z.ts",
-      "src/a.ts",
-      "src/z.ts",
-    ]);
+    const pruned = pruneFileTreePaths(["src/z.ts", "src/a.ts", "src/z.ts"]);
     expect(pruned).toEqual(["src/a.ts", "src/z.ts"]);
   });
 });

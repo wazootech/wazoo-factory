@@ -33,7 +33,8 @@ export const FileTreePaths = z
   .array(z.string().min(1).max(FILE_TREE_PATH_MAX))
   .max(FILE_TREE_MAX_PATHS)
   .refine(
-    (paths) => paths.reduce((n, p) => n + p.length + 1, 0) <= FILE_TREE_MAX_CHARS,
+    (paths) =>
+      paths.reduce((n, p) => n + p.length + 1, 0) <= FILE_TREE_MAX_CHARS,
     {
       message: `fileTree exceeds the ${FILE_TREE_MAX_CHARS}-char layout budget`,
     },

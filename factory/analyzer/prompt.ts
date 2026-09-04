@@ -55,7 +55,9 @@ export function buildAnalyzerUserPrompt(
   }
 
   if (input.fileTree && input.fileTree.length > 0) {
-    sections.push(`\n## Repository source layout (files at the change's base revision)`);
+    sections.push(
+      `\n## Repository source layout (files at the change's base revision)`,
+    );
     sections.push(
       `Name files in your specification and affectedFiles using the exact paths below. ` +
         `When the issue describes a surface (a page, route, module, or component), ` +
