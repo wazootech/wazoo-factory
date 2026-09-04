@@ -12,8 +12,11 @@ import {
 import {
   ReviewOutput,
   capReviewChanges,
+  capReviewDiff,
   REVIEW_CHANGE_CONTENT_CAP,
   REVIEW_CHANGE_TOTAL_CAP,
+  REVIEW_DIFF_CONTENT_CAP,
+  REVIEW_DIFF_TOTAL_CAP,
 } from "@/factory/reviewer/schema.ts";
 import reviewImplementationTool from "@/agent/tools/review_implementation.ts";
 
@@ -287,5 +290,81 @@ describe("live reviewer env resolution", () => {
     // parsing must accept exactly the shape the model is shown.
     const parsed = ReviewOutput.parse(validReview);
     expect(parsed.summary).toBe(validReview.summary);
+  });
+});
+
+describe("review diff seam (#82)", () => {
+  // Whole-file source stays the fallback carrier; the unified diff replaces
+  // it in the prompt when the executor captured hunks against the base.
+  const diffInput = {
+    ...baseInput,
+    diff: [
+      {
+        path: "src/parser.ts",
+        content: [
+          "diff --git a/src/parser.ts b/src/parser.ts",
+          "index 7b0e..9f2a 100644",
+          "--- a/src/parser.ts",
+          "+++ b/src/parser.ts",
+          "@@ -1,4 +1,5 @@",
+          " export function parseFrame(buffer: Uint8Array): Frame {",
+          "   if (buffer.length === 0) throw new Error('empty frame');",
+          "+  return decode(buffer); // tail edit past any head truncation",
+          " }",
+        ].join("\n"),
+      },
+    ],
+  };
+
+  it("prefers the unified diff over whole-file heads in the prompt (#82)", async () => {
+    const generate = okGenerate();
+    await reviewImplementation(makeDeps({ generate }), diffInput);
+    const call = generate.mock.calls[0]![0] as {
+      system: string;
+      prompt: string;
+    };
+    expect(call.prompt).toContain("## Change Diff");
+    expect(call.prompt).toContain("### src/parser.ts");
+    expect(call.prompt).toContain(
+      "+  return decode(buffer); // tail edit past any head truncation",
+    );
+    // The hunks are the review basis; whole-file heads are not duplicated.
+    expect(call.prompt).not.toContain("## Changed Source");
+  });
+
+  it("keeps whole-file source as the fallback when no diff was captured", async () => {
+    const generate = okGenerate();
+    await reviewImplementation(makeDeps({ generate }), baseInput);
+    const call = generate.mock.calls[0]![0] as {
+      system: string;
+      prompt: string;
+    };
+    expect(call.prompt).toContain("## Changed Source");
+    expect(call.prompt).not.toContain("## Change Diff");
+  });
+
+  it("caps oversized captured diffs with an explicit truncation marker", () => {
+    const big = "a".repeat(REVIEW_DIFF_CONTENT_CAP + 500);
+    const [capped] = capReviewDiff([{ path: "src/big.ts", content: big }]);
+    expect(capped?.content.length).toBeLessThanOrEqual(REVIEW_DIFF_CONTENT_CAP);
+    expect(capped?.content.startsWith("a".repeat(100))).toBe(true);
+    expect(capped?.content).toContain("diff truncated for review context");
+  });
+
+  it("drops whole diffs past the aggregate cap with a visible omission marker", () => {
+    const diffs = Array.from({ length: 20 }, (_, i) => ({
+      path: `src/file-${i}.ts`,
+      content: "x".repeat(REVIEW_DIFF_TOTAL_CAP / 10),
+    }));
+    const capped = capReviewDiff(diffs);
+    const total = capped.reduce((sum, diff) => sum + diff.content.length, 0);
+    expect(total).toBeLessThanOrEqual(REVIEW_DIFF_TOTAL_CAP + 200);
+    const omitted = capped.find((diff) => diff.path === "<omitted>");
+    expect(omitted?.content).toMatch(/more changed file\(s\) omitted/);
+  });
+
+  it("passes already-capped diffs through idempotently", () => {
+    const diffs = [{ path: "src/a.ts", content: "short" }];
+    expect(capReviewDiff(diffs)).toEqual(diffs);
   });
 });

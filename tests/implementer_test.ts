@@ -79,6 +79,9 @@ function makeExecutor(
     delay?: (ms: number) => Promise<void>;
     commandTimeoutMs?: number;
     phaseTimeoutMs?: number;
+    // #82: tests default to off so their exact-command assertions script
+    // only the check protocol; the git-capture tests opt in explicitly.
+    captureDiff?: boolean;
   } = {},
 ) {
   return new EveNativeExecutor({
@@ -89,6 +92,7 @@ function makeExecutor(
     delay: options.delay ?? (async () => {}),
     commandTimeoutMs: options.commandTimeoutMs,
     phaseTimeoutMs: options.phaseTimeoutMs,
+    captureDiff: options.captureDiff ?? false,
   });
 }
 
@@ -600,6 +604,90 @@ describe("EveNativeExecutor (#68)", () => {
       expect(check.output).toContain("tail-marker");
     }
     expectValid(result);
+  });
+
+  it("captures a unified diff of the change when the sandbox exposes git (#82)", async () => {
+    // git prints the marked per-path diff for the edited file and nothing
+    // else; every check still passes.
+    const diffFixture = [
+      "diff --git a/src/tracer.ts b/src/tracer.ts",
+      "new file mode 100644",
+      "index 0000000..e69de29",
+      "--- /dev/null",
+      "+++ b/src/tracer.ts",
+      "@@ -0,0 +1,1 @@",
+      "+export const trace = () => {};",
+    ].join("\n");
+    // The probe is one combined script, so the sandbox answers with the
+    // marked diff stream whenever the command reaches the git stage.
+    const { sandbox, commands } = makeSandbox((command) =>
+      command.includes("git diff")
+        ? {
+            exitCode: 0,
+            stdout: `###FILE src/tracer.ts\n${diffFixture}\n`,
+            stderr: "",
+          }
+        : okRun,
+    );
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate, { captureDiff: true });
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    expect(result.success).toBe(true);
+    // The captured hunks travel with the result; the trailing newline git
+    // prints is stripped so content matches the source of truth.
+    expect(result.diff).toEqual([
+      { path: "src/tracer.ts", content: diffFixture },
+    ]);
+    expectValid(result);
+    // The git probe is one round trip after the three checks; the script
+    // marks new files intent-to-add, diffs them per path, and drops the
+    // marks so the index is left exactly as found.
+    expect(commands).toHaveLength(4);
+    const git = commands[3]!;
+    expect(git).toContain("git add -N -- 'src/tracer.ts'");
+    expect(git).toContain("git diff --no-ext-diff --unified=3");
+    expect(git).toContain("git reset -q -- 'src/tracer.ts'");
+  });
+
+  it("falls back to post-edit source when the sandbox has no git (#82)", async () => {
+    const { sandbox, commands } = makeSandbox((command) =>
+      command.includes("git ")
+        ? {
+            exitCode: 128,
+            stdout: "",
+            stderr: "fatal: not a git repository",
+          }
+        : okRun,
+    );
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate, { captureDiff: true });
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    expect(result.success).toBe(true);
+    // No hunks captured, but the whole-file source still rides along as the
+    // review's fallback carrier (#78/#82).
+    expect(result.diff).toBeUndefined();
+    expect(result.changes).toEqual([
+      { path: "src/tracer.ts", content: "export const trace = () => {};\n" },
+    ]);
+    expect(commands).toHaveLength(4); // 3 checks + 1 failed git probe
+  });
+
+  it("skips the git probe entirely when captureDiff is off (#82)", async () => {
+    const { sandbox, commands } = makeSandbox();
+    const generate = vi.fn(async (_params: GenerateParams) => editBatch());
+    const executor = makeExecutor(sandbox, generate, { captureDiff: false });
+
+    const result = await executor.run(baseTask, workspacePath);
+
+    expect(result.success).toBe(true);
+    expect(result.diff).toBeUndefined();
+    // Only the three checks ran: no git round trip.
+    expect(commands).toHaveLength(3);
+    expect(commands.some((command) => command.includes("git "))).toBe(false);
   });
 });
 

@@ -29,6 +29,7 @@ import runPipelineTool from "@/agent/tools/run_pipeline.ts";
 import type { ClassifyIssueDeps } from "@/factory/classifier/classifier.ts";
 import type { AnalyzeIssueDeps } from "@/factory/analyzer/analyzer.ts";
 import type { ReviewerDeps } from "@/factory/reviewer/reviewer.ts";
+import { REVIEW_CHANGE_CONTENT_CAP } from "@/factory/reviewer/schema.ts";
 
 const request: ChangeRequest = {
   id: "workflow-pipeline",
@@ -307,6 +308,148 @@ describe("FactoryPipeline", () => {
     expect(seenPrompt).toContain("## Changed Source");
     expect(seenPrompt).toContain("### src/tracer.ts");
     expect(seenPrompt).toContain("console.log(frame)");
+  });
+
+  it("persists the executor-captured diff and prefers it at the review gate (#82)", async () => {
+    let seenPrompt = "";
+    // A tail edit a whole-file head-truncation would hide from the reviewer.
+    const diffFixture = {
+      path: "src/tracer.ts",
+      content: [
+        "diff --git a/src/tracer.ts b/src/tracer.ts",
+        "index 7b0e..9f2a 100644",
+        "--- a/src/tracer.ts",
+        "+++ b/src/tracer.ts",
+        "@@ -1,2 +1,4 @@",
+        " export function trace(frame: unknown): void {",
+        "+  if (!frame) throw new Error('missing frame');",
+        "   console.log(frame);",
+        " }",
+      ].join("\n"),
+    };
+    const pipeline = new FactoryPipeline(
+      deps({
+        workflow: new FactoryWorkflow(
+          new MemoryWorkflowStore(),
+          new FakeWorkspace(),
+          new FakeGitHub(),
+          {
+            async implement() {
+              return {
+                success: true,
+                filesChanged: ["src/tracer.ts"],
+                changes: [{ path: "src/tracer.ts", content: tracedSource }],
+                diff: [diffFixture],
+                checksRun: [{ name: "typecheck", exitCode: 0 }],
+                interrupted: false,
+                resumed: false,
+              };
+            },
+          },
+          verification,
+          reviewAdapter,
+          "test-secret",
+        ),
+        review: {
+          ...reviewDeps(),
+          generate: async (params: { prompt: string }) => {
+            seenPrompt = params.prompt;
+            return {
+              passed: true,
+              findings: [],
+              summary: "Implementation matches the plan.",
+              riskAssessment: {
+                sideEffectRisk: "low",
+                performanceRisk: "none",
+                backwardsCompatibilityRisk: "none",
+              },
+            };
+          },
+        },
+      }),
+    );
+    const outcome = await pipeline.run(request, issue);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // The hunks persisted on the implementation artifact with the source.
+    expect(outcome.workflow.implementation?.diff).toEqual([diffFixture]);
+    // The review judged the diff hunks, not duplicated whole-file heads.
+    expect(seenPrompt).toContain("## Change Diff");
+    expect(seenPrompt).toContain("### src/tracer.ts");
+    expect(seenPrompt).toContain(
+      "+  if (!frame) throw new Error('missing frame');",
+    );
+    expect(seenPrompt).not.toContain("## Changed Source");
+  });
+
+  it("judges a tail edit that whole-file head-truncation would hide (#82)", async () => {
+    // The edited file is large enough that its meaningful change sits past
+    // the per-file source cap. The fake emulates the executor's end state:
+    // whole-file source capped to its head (the tail edit cut out of it)
+    // plus captured hunks that still carry the tail edit.
+    const tailEdit = "export const tailEdit = () => true;";
+    const cappedSource = "a".repeat(REVIEW_CHANGE_CONTENT_CAP);
+    let seenPrompt = "";
+    const pipeline = new FactoryPipeline(
+      deps({
+        workflow: new FactoryWorkflow(
+          new MemoryWorkflowStore(),
+          new FakeWorkspace(),
+          new FakeGitHub(),
+          {
+            async implement() {
+              return {
+                success: true,
+                filesChanged: ["src/tracer.ts"],
+                changes: [{ path: "src/tracer.ts", content: cappedSource }],
+                diff: [
+                  {
+                    path: "src/tracer.ts",
+                    content: [
+                      "diff --git a/src/tracer.ts b/src/tracer.ts",
+                      "--- a/src/tracer.ts",
+                      "+++ b/src/tracer.ts",
+                      "@@ -22000,1 +22000,1 @@",
+                      `+${tailEdit}`,
+                    ].join("\n"),
+                  },
+                ],
+                checksRun: [{ name: "typecheck", exitCode: 0 }],
+                interrupted: false,
+                resumed: false,
+              };
+            },
+          },
+          verification,
+          reviewAdapter,
+          "test-secret",
+        ),
+        review: {
+          ...reviewDeps(),
+          generate: async (params: { prompt: string }) => {
+            seenPrompt = params.prompt;
+            return {
+              passed: true,
+              findings: [],
+              summary: "Implementation matches the plan.",
+              riskAssessment: {
+                sideEffectRisk: "low",
+                performanceRisk: "none",
+                backwardsCompatibilityRisk: "none",
+              },
+            };
+          },
+        },
+      }),
+    );
+    const outcome = await pipeline.run(request, issue);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // The tail edit reached the review gate as a hunk — the whole-file head
+    // it was cut out of never would have shown it.
+    expect(seenPrompt).toContain("## Change Diff");
+    expect(seenPrompt).toContain(`+${tailEdit}`);
+    expect(seenPrompt).not.toContain("## Changed Source");
   });
 
   it("halts at the review stage when the implementation carried no source (#78)", async () => {
