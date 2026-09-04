@@ -15,6 +15,9 @@ import {
   digestArtifact,
   type ChangeRequest,
   type Plan,
+  ImplementationResult,
+  VerificationEvidence,
+  type WorkflowRecord,
 } from "@/factory/core/contracts.ts";
 import { MemoryWorkflowStore } from "@/factory/core/storage.ts";
 import { FactoryWorkflow } from "@/factory/core/workflow.ts";
@@ -117,6 +120,53 @@ const verification: VerificationAdapter = {
 const review: ReviewAdapter = {
   async review() {
     return { passed: true, findings: [], reviewer: "independent-reviewer" };
+  },
+};
+
+/**
+ * #80 test seam: a store that simulates a concurrent writer racing a failure
+ * landing. When the next failed-transition save arrives from `fromStage`, the
+ * writer advances the workflow first (bumping the revision), so the failure
+ * landing's optimistic save loses and throws a revision conflict.
+ */
+class ConcurrentWriterStore extends MemoryWorkflowStore {
+  private injections: Array<{
+    fromStage: WorkflowRecord["stage"];
+    advance: (current: WorkflowRecord) => WorkflowRecord;
+  }> = [];
+
+  raceFailureLanding(
+    fromStage: WorkflowRecord["stage"],
+    advance: (current: WorkflowRecord) => WorkflowRecord,
+  ) {
+    this.injections.push({ fromStage, advance });
+  }
+
+  async saveWorkflow(workflow: WorkflowRecord, expectedRevision?: number) {
+    if (
+      workflow.stage === "failed" &&
+      expectedRevision !== undefined &&
+      this.injections.length > 0
+    ) {
+      const injection = this.injections[0]!;
+      const current = await this.getWorkflow(workflow.workflowId);
+      if (
+        current &&
+        current.stage === injection.fromStage &&
+        current.revision === expectedRevision
+      ) {
+        this.injections.shift();
+        // The concurrent writer saves first; the failure landing now conflicts.
+        await super.saveWorkflow(injection.advance(current), current.revision);
+      }
+    }
+    return super.saveWorkflow(workflow, expectedRevision);
+  }
+}
+
+const throwingVerification: VerificationAdapter = {
+  async verify() {
+    throw new Error("verification infra unavailable");
   },
 };
 
@@ -731,5 +781,177 @@ describe("FactoryWorkflow", () => {
     expect(failed?.review?.error?.message).toContain(
       "Review must be independent",
     );
+  });
+
+  it("surfaces the original error when a concurrent writer advances past a failed implement (#80)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      {
+        async implement() {
+          throw new Error("model call exhausted after 3 attempts");
+        },
+      },
+      verification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+
+    // The concurrent writer races the failure landing: it completes the
+    // implementation (implementing -> implemented) between the executor throw
+    // and landFailure's optimistic save.
+    store.raceFailureLanding("implementing", (current) => ({
+      ...current,
+      stage: "implemented",
+      implementation: ImplementationResult.parse({
+        workflowId: current.workflowId,
+        success: true,
+        filesChanged: ["src/tracer.ts"],
+        revision: current.request.repository.baseRevision,
+        checks: [{ name: "typecheck", exitCode: 0 }],
+        artifactDigest: "b".repeat(64),
+      }),
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    // The caller sees the original executor error, never a revision conflict.
+    await expect(
+      workflow.implement(
+        request.id,
+        { id: "implementation-1", prompt: "Implement the tracer" },
+        [approval(request.id, "mutate-repository", planDigest)],
+      ),
+    ).rejects.toThrow("model call exhausted after 3 attempts");
+
+    // The concurrent writer's progress won: the workflow is healthy at
+    // implemented, not failed and not stranded in implementing, and no stale
+    // failure record or audit was written over it.
+    const advanced = await store.getWorkflow(request.id);
+    expect(advanced?.stage).toBe("implemented");
+    expect(advanced?.implementation?.success).toBe(true);
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(false);
+  });
+
+  it("surfaces the original error when a concurrent writer verifies past a failed verify (#80)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      throwingVerification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+
+    // The concurrent writer's twin verify succeeds between our verify seam
+    // throwing and the failure landing's optimistic save.
+    store.raceFailureLanding("implemented", (current) => ({
+      ...current,
+      stage: "verified",
+      verification: VerificationEvidence.parse({
+        workflowId: current.workflowId,
+        passed: true,
+        checks: [{ name: "test", exitCode: 0, output: "passed" }],
+        revision: current.request.repository.baseRevision,
+        artifactDigest: "c".repeat(64),
+      }),
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    await expect(workflow.verify(request.id)).rejects.toThrow(
+      "verification infra unavailable",
+    );
+
+    // The twin's healthy verification won; our stale failure was not landed.
+    const advanced = await store.getWorkflow(request.id);
+    expect(advanced?.stage).toBe("verified");
+    expect(advanced?.verification?.passed).toBe(true);
+    expect(
+      (await store.getAudit(request.id)).some(
+        (event) => event.action === "workflow.failed",
+      ),
+    ).toBe(false);
+  });
+
+  it("retries the failed transition once when the workflow is still mid-stage (#80)", async () => {
+    const store = new ConcurrentWriterStore();
+    const workflow = new FactoryWorkflow(
+      store,
+      new FakeWorkspace(),
+      new FakeGitHub(),
+      sandbox,
+      throwingVerification,
+      review,
+      "test-secret",
+    );
+    await workflow.start(request);
+    const planDigest = await planAndApprove(workflow, {
+      id: "plan-1",
+      workflowId: request.id,
+      summary: request.summary,
+      steps: ["Implement the tracer"],
+      candidateIssues: [issue],
+    });
+    await workflow.implement(
+      request.id,
+      { id: "implementation-1", prompt: "Implement the tracer" },
+      [approval(request.id, "mutate-repository", planDigest)],
+    );
+
+    // The concurrent writer bumps the revision without leaving the failing
+    // stage (implemented -> implemented); failure is still the honest outcome,
+    // so landFailure retries against the fresh revision.
+    store.raceFailureLanding("implemented", (current) => ({
+      ...current,
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    await expect(workflow.verify(request.id)).rejects.toThrow(
+      "verification infra unavailable",
+    );
+
+    // The failure landed on the retry: failed, with the structured error, the
+    // idempotency key marked, and exactly one workflow.failed audit.
+    const failed = await store.getWorkflow(request.id);
+    expect(failed?.stage).toBe("failed");
+    expect(failed?.verification?.error?.message).toContain(
+      "verification infra unavailable",
+    );
+    expect(failed?.idempotency[`verify:${request.id}`]).toBeTruthy();
+    const failures = (await store.getAudit(request.id)).filter(
+      (event) => event.action === "workflow.failed",
+    );
+    expect(failures).toHaveLength(1);
   });
 });

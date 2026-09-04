@@ -30,7 +30,7 @@ import type {
   VerificationAdapter,
   WorkspaceAdapter,
 } from "./adapters.ts";
-import type { WorkflowStore } from "./storage.ts";
+import { isWorkflowRevisionConflict, type WorkflowStore } from "./storage.ts";
 
 export class FactoryWorkflow {
   constructor(
@@ -553,8 +553,48 @@ export class FactoryWorkflow {
    * idempotency key. Callers rethrow the original error afterwards so the
    * failure still propagates; the invariant is that a workflow is never left
    * in a mid-stage state that a retry cannot advance (mirrors implement()).
+   *
+   * #80: tolerate a concurrent writer that advanced the workflow between this
+   * stage's initial read and the failure landing. The optimistic save's
+   * revision conflict must never mask the original stage error: re-read the
+   * latest workflow and only land the failure when it still sits in the stage
+   * this call was failing from (failure is still the honest outcome), retried
+   * once against the fresh revision. If the concurrent writer already left
+   * that stage — healthy progress, or a failure another writer recorded — this
+   * failure is stale: return without landing so the caller rethrows the
+   * original error, and the workflow stays wherever the winner put it, never
+   * stranded mid-stage. Non-conflict store errors still propagate: a store
+   * outage is not recoverable by re-reading, and swallowing it would lose the
+   * failure entirely.
    */
   private async landFailure(
+    workflow: WorkflowRecord,
+    idempotencyKey: string,
+    artifact: { artifactDigest: string },
+    fields: Partial<WorkflowRecord>,
+  ): Promise<void> {
+    try {
+      await this.persistFailure(workflow, idempotencyKey, artifact, fields);
+    } catch (error) {
+      if (!isWorkflowRevisionConflict(error)) throw error;
+      const latest = await this.require(workflow.workflowId);
+      // The concurrent writer left the failing stage: its progress (or its own
+      // failure record) is the honest state and this failure is stale. Return
+      // so the caller rethrows the original error — never the raw conflict.
+      if (latest.stage !== workflow.stage) return;
+      // Still mid-stage: retry the failed transition once against the fresh
+      // revision. A second conflict means writers are actively racing; give up
+      // quietly — the caller still surfaces the original error, and every
+      // writer only persists valid transitions, so nothing can strand.
+      try {
+        await this.persistFailure(latest, idempotencyKey, artifact, fields);
+      } catch (retryError) {
+        if (!isWorkflowRevisionConflict(retryError)) throw retryError;
+      }
+    }
+  }
+
+  private async persistFailure(
     workflow: WorkflowRecord,
     idempotencyKey: string,
     artifact: { artifactDigest: string },

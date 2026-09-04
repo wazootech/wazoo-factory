@@ -21,6 +21,26 @@ export interface WorkflowStore extends ArtifactStore {
   getApproval(approvalId: string): Promise<Approval | undefined>;
 }
 
+/**
+ * Optimistic-concurrency marker: saveWorkflow was given an expectedRevision
+ * that no longer matches the stored workflow because a concurrent writer
+ * saved first. The built-in stores throw this class; the guard also matches
+ * backends that only reproduce the identical message (#80).
+ */
+export class WorkflowRevisionConflictError extends Error {
+  constructor() {
+    super("Workflow revision conflict");
+    this.name = "WorkflowRevisionConflictError";
+  }
+}
+
+export function isWorkflowRevisionConflict(error: unknown): boolean {
+  return (
+    error instanceof WorkflowRevisionConflictError ||
+    (error instanceof Error && error.message === "Workflow revision conflict")
+  );
+}
+
 export class MemoryWorkflowStore implements WorkflowStore {
   private readonly workflows = new Map<string, WorkflowRecord>();
   private readonly artifacts = new Map<string, unknown>();
@@ -37,7 +57,7 @@ export class MemoryWorkflowStore implements WorkflowStore {
       expectedRevision !== undefined &&
       current?.revision !== expectedRevision
     )
-      throw new Error("Workflow revision conflict");
+      throw new WorkflowRevisionConflictError();
     this.workflows.set(workflow.workflowId, structuredClone(workflow));
   }
   async put<T>(digest: string, artifact: T) {
