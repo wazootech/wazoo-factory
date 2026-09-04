@@ -32,6 +32,21 @@ import type {
 } from "./adapters.ts";
 import { isWorkflowRevisionConflict, type WorkflowStore } from "./storage.ts";
 
+/**
+ * #87: typed outcome for a success-transition save that lost the race to a
+ * concurrent writer — the winner made a different (or further) transition
+ * than this call, so this call's result does not stand. Distinct from the
+ * raw WorkflowRevisionConflictError (which is internal to the store) so
+ * callers can treat "another writer owns this workflow" as a defined
+ * outcome instead of a storage error.
+ */
+export class WorkflowRaceLostError extends Error {
+  constructor(workflowId: string) {
+    super(`Lost the race to a concurrent writer: workflow ${workflowId}`);
+    this.name = "WorkflowRaceLostError";
+  }
+}
+
 export class FactoryWorkflow {
   constructor(
     private readonly store: WorkflowStore,
@@ -130,6 +145,7 @@ export class FactoryWorkflow {
   ) {
     const workflow = await this.require(workflowId);
     if (workflow.idempotency[idempotencyKey]) return workflow;
+    let next: WorkflowRecord;
     try {
       const candidate = await this.github.searchIssues(
         workflow.request.repository.repository,
@@ -163,7 +179,7 @@ export class FactoryWorkflow {
         "associate-issues",
         artifactDigest,
       );
-      const next = this.transition(workflow, "planned", {
+      next = this.transition(workflow, "planned", {
         plan: { ...value, artifactDigest },
         idempotency: {
           ...workflow.idempotency,
@@ -171,14 +187,6 @@ export class FactoryWorkflow {
         },
       });
       await this.store.put(artifactDigest, value);
-      await this.store.saveWorkflow(next, workflow.revision);
-      await this.audit(
-        next,
-        "workflow.planned",
-        workflow.request.requester,
-        artifactDigest,
-      );
-      return next;
     } catch (error) {
       // #75 strand-proofing: a thrown issue-search or approval error lands a
       // structured failure record (the plan is the artifact, so the error
@@ -198,6 +206,25 @@ export class FactoryWorkflow {
       });
       throw error;
     }
+    // #87: the final save is a success transition, not stage work — a
+    // concurrent writer's conflict must bypass the failure catch entirely (no
+    // failure artifact, no workflow.failed audit over a healthy advance).
+    // saveSuccess returns the winner's workflow when a twin's identical save
+    // already landed this call's outcome; the audit is the winner's to write.
+    const landed = await this.saveSuccess(
+      next,
+      workflow.revision,
+      idempotencyKey,
+    );
+    if (landed.won) {
+      await this.audit(
+        landed.workflow,
+        "workflow.planned",
+        workflow.request.requester,
+        next.plan!.artifactDigest,
+      );
+    }
+    return landed.workflow;
   }
 
   async implement(
@@ -218,7 +245,26 @@ export class FactoryWorkflow {
       workflow.plan.artifactDigest,
     );
     const running = this.transition(workflow, "implementing");
-    await this.store.saveWorkflow(running, workflow.revision);
+    // #87: the running save sits before the executor and outside any failure
+    // path, so a raw revision conflict would surface untouched. Defined
+    // behavior when a twin gets this far (fenced today by single-use
+    // approvals — consumeApproval — so it takes a second minted approval for
+    // the same plan digest or an approval replay): if the twin already
+    // completed the implementation (implemented/failed), this call's outcome
+    // is subsumed — return the winner's state, no error, no double-execution.
+    // If the twin is still in-flight (implementing), another writer owns
+    // execution — throw the typed race error rather than run the executor
+    // twice. Non-conflict store errors still propagate.
+    try {
+      await this.store.saveWorkflow(running, workflow.revision);
+    } catch (error) {
+      if (!isWorkflowRevisionConflict(error)) throw error;
+      const latest = await this.require(workflow.workflowId);
+      if (latest.stage === "implemented" || latest.stage === "failed") {
+        return latest;
+      }
+      throw new WorkflowRaceLostError(workflow.workflowId);
+    }
     // Give the executor repo context: when the implement spec omits
     // affectedFiles, fall back to the plan's analyzer-derived list so the
     // model always sees the files the change is expected to touch.
@@ -276,14 +322,24 @@ export class FactoryWorkflow {
       : this.transition(running, "failed", { implementation });
     next.idempotency[idempotencyKey] = implementation.artifactDigest;
     await this.store.put(implementation.artifactDigest, implementation);
-    await this.store.saveWorkflow(next, running.revision);
-    await this.audit(
+    // #87: conflict-tolerant success save — a twin's identical result (same
+    // stage, same idempotency-key digest) is this call's outcome, so adopt
+    // the winner's workflow and skip our duplicate audit; a divergent twin
+    // gets the typed race error. Never the raw revision conflict.
+    const landed = await this.saveSuccess(
       next,
-      implementation.success ? "workflow.implemented" : "workflow.failed",
-      workflow.request.requester,
-      implementation.artifactDigest,
+      running.revision,
+      idempotencyKey,
     );
-    return next;
+    if (landed.won) {
+      await this.audit(
+        landed.workflow,
+        implementation.success ? "workflow.implemented" : "workflow.failed",
+        workflow.request.requester,
+        implementation.artifactDigest,
+      );
+    }
+    return landed.workflow;
   }
 
   async verify(workflowId: string, idempotencyKey = `verify:${workflowId}`) {
@@ -291,32 +347,26 @@ export class FactoryWorkflow {
     if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.implementation?.success)
       throw new Error("Successful implementation is required");
+    let next: WorkflowRecord;
+    let verification: VerificationEvidence;
     try {
       const checks = await this.verification.verify({
         workflowId,
         path: workflow.request.repository.worktree,
         revision: workflow.implementation.revision,
       });
-      const verification = VerificationEvidence.parse({
+      verification = VerificationEvidence.parse({
         workflowId,
         passed: checks.every((check) => check.exitCode === 0),
         checks: checks.map(redactCheckOutput),
         revision: workflow.implementation.revision,
         artifactDigest: digestArtifact(checks),
       });
-      const next = verification.passed
+      next = verification.passed
         ? this.transition(workflow, "verified", { verification })
         : this.transition(workflow, "failed", { verification });
       next.idempotency[idempotencyKey] = verification.artifactDigest;
       await this.store.put(verification.artifactDigest, verification);
-      await this.store.saveWorkflow(next, workflow.revision);
-      await this.audit(
-        next,
-        verification.passed ? "workflow.verified" : "workflow.failed",
-        workflow.request.requester,
-        verification.artifactDigest,
-      );
-      return next;
     } catch (error) {
       // #75 strand-proofing: a thrown verification error lands a structured
       // failure record (VerificationEvidence.error), a failed transition, and
@@ -325,7 +375,7 @@ export class FactoryWorkflow {
       // verify() against the wrong stage is a caller bug, rethrown untouched.
       if (workflow.stage !== "implemented") throw error;
       const err = this.failureRecord(error);
-      const verification = VerificationEvidence.parse({
+      const failure = VerificationEvidence.parse({
         workflowId,
         passed: false,
         checks: [],
@@ -333,11 +383,28 @@ export class FactoryWorkflow {
         error: err,
         artifactDigest: this.failureDigest(err),
       });
-      await this.landFailure(workflow, idempotencyKey, verification, {
-        verification,
+      await this.landFailure(workflow, idempotencyKey, failure, {
+        verification: failure,
       });
       throw error;
     }
+    // #87: the final save is a success transition, not stage work — a
+    // concurrent writer's conflict must bypass the failure catch entirely (no
+    // failure artifact, no workflow.failed audit over a healthy advance).
+    const landed = await this.saveSuccess(
+      next,
+      workflow.revision,
+      idempotencyKey,
+    );
+    if (landed.won) {
+      await this.audit(
+        landed.workflow,
+        verification.passed ? "workflow.verified" : "workflow.failed",
+        workflow.request.requester,
+        verification.artifactDigest,
+      );
+    }
+    return landed.workflow;
   }
 
   async reviewWorkflow(
@@ -349,6 +416,8 @@ export class FactoryWorkflow {
     if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.verification?.passed)
       throw new Error("Passing verification is required");
+    let next: WorkflowRecord;
+    let verdict: ReviewVerdict;
     try {
       const result = await this.review.review({
         workflowId,
@@ -358,7 +427,7 @@ export class FactoryWorkflow {
       });
       if (result.reviewer === workflow.request.requester)
         throw new Error("Review must be independent");
-      const verdict = ReviewVerdict.parse({
+      verdict = ReviewVerdict.parse({
         workflowId,
         reviewer,
         passed: result.passed,
@@ -366,19 +435,11 @@ export class FactoryWorkflow {
         revision: workflow.verification.revision,
         artifactDigest: digestArtifact(result),
       });
-      const next = result.passed
+      next = result.passed
         ? this.transition(workflow, "reviewed", { review: verdict })
         : this.transition(workflow, "failed", { review: verdict });
       next.idempotency[idempotencyKey] = verdict.artifactDigest;
       await this.store.put(verdict.artifactDigest, verdict);
-      await this.store.saveWorkflow(next, workflow.revision);
-      await this.audit(
-        next,
-        result.passed ? "workflow.reviewed" : "workflow.failed",
-        reviewer,
-        verdict.artifactDigest,
-      );
-      return next;
     } catch (error) {
       // #75 strand-proofing: a thrown reviewer error — or a reviewer that
       // fails independence — lands a structured failure record
@@ -388,7 +449,7 @@ export class FactoryWorkflow {
       // wrong stage is a caller bug, rethrown untouched.
       if (workflow.stage !== "verified") throw error;
       const err = this.failureRecord(error);
-      const verdict = ReviewVerdict.parse({
+      const failure = ReviewVerdict.parse({
         workflowId,
         reviewer,
         passed: false,
@@ -397,11 +458,28 @@ export class FactoryWorkflow {
         error: err,
         artifactDigest: this.failureDigest(err),
       });
-      await this.landFailure(workflow, idempotencyKey, verdict, {
-        review: verdict,
+      await this.landFailure(workflow, idempotencyKey, failure, {
+        review: failure,
       });
       throw error;
     }
+    // #87: the final save is a success transition, not stage work — a
+    // concurrent writer's conflict must bypass the failure catch entirely (no
+    // failure artifact, no workflow.failed audit over a healthy advance).
+    const landed = await this.saveSuccess(
+      next,
+      workflow.revision,
+      idempotencyKey,
+    );
+    if (landed.won) {
+      await this.audit(
+        landed.workflow,
+        verdict.passed ? "workflow.reviewed" : "workflow.failed",
+        reviewer,
+        verdict.artifactDigest,
+      );
+    }
+    return landed.workflow;
   }
 
   async submitReview(
@@ -418,12 +496,14 @@ export class FactoryWorkflow {
     if (workflow.idempotency[idempotencyKey]) return workflow;
     if (!workflow.verification?.passed)
       throw new Error("Passing verification is required");
+    let next: WorkflowRecord;
+    let verdict: ReviewVerdict;
     try {
       if (input.reviewer === workflow.request.requester)
         throw new Error("Review must be independent");
       if (input.revision !== workflow.verification.revision)
         throw new Error("Review revision mismatch");
-      const verdict = ReviewVerdict.parse({
+      verdict = ReviewVerdict.parse({
         workflowId,
         reviewer: input.reviewer,
         passed: input.passed,
@@ -431,19 +511,11 @@ export class FactoryWorkflow {
         revision: input.revision,
         artifactDigest: digestArtifact(input),
       });
-      const next = input.passed
+      next = input.passed
         ? this.transition(workflow, "reviewed", { review: verdict })
         : this.transition(workflow, "failed", { review: verdict });
       next.idempotency[idempotencyKey] = verdict.artifactDigest;
       await this.store.put(verdict.artifactDigest, verdict);
-      await this.store.saveWorkflow(next, workflow.revision);
-      await this.audit(
-        next,
-        input.passed ? "workflow.reviewed" : "workflow.failed",
-        input.reviewer,
-        verdict.artifactDigest,
-      );
-      return next;
     } catch (error) {
       // #75 strand-proofing: an invalid review verdict that cannot be recorded
       // (independence or revision violations) lands a structured failure
@@ -454,7 +526,7 @@ export class FactoryWorkflow {
       // untouched.
       if (workflow.stage !== "verified") throw error;
       const err = this.failureRecord(error);
-      const verdict = ReviewVerdict.parse({
+      const failure = ReviewVerdict.parse({
         workflowId,
         reviewer: input.reviewer,
         passed: false,
@@ -463,11 +535,28 @@ export class FactoryWorkflow {
         error: err,
         artifactDigest: this.failureDigest(err),
       });
-      await this.landFailure(workflow, idempotencyKey, verdict, {
-        review: verdict,
+      await this.landFailure(workflow, idempotencyKey, failure, {
+        review: failure,
       });
       throw error;
     }
+    // #87: the final save is a success transition, not stage work — a
+    // concurrent writer's conflict must bypass the failure catch entirely (no
+    // failure artifact, no workflow.failed audit over a healthy advance).
+    const landed = await this.saveSuccess(
+      next,
+      workflow.revision,
+      idempotencyKey,
+    );
+    if (landed.won) {
+      await this.audit(
+        landed.workflow,
+        verdict.passed ? "workflow.reviewed" : "workflow.failed",
+        input.reviewer,
+        verdict.artifactDigest,
+      );
+    }
+    return landed.workflow;
   }
 
   async createDraftPullRequest(
@@ -505,14 +594,26 @@ export class FactoryWorkflow {
         [idempotencyKey]: workflow.review.artifactDigest,
       },
     });
-    await this.store.saveWorkflow(next, workflow.revision);
-    await this.audit(
+    // #87: conflict-tolerant success save — the idempotency digest derives
+    // from the shared review artifact, so a twin's identical pr_ready save is
+    // always this call's outcome (adopt, skip our duplicate audit); a twin
+    // that took a divergent path gets the typed race error. The draft-PR
+    // creation call itself already happened before this save, so a losing
+    // twin's GitHub side effect is deduped upstream, not here.
+    const landed = await this.saveSuccess(
       next,
-      "workflow.pr_created",
-      workflow.request.requester,
-      workflow.review.artifactDigest,
+      workflow.revision,
+      idempotencyKey,
     );
-    return next;
+    if (landed.won) {
+      await this.audit(
+        landed.workflow,
+        "workflow.pr_created",
+        workflow.request.requester,
+        workflow.review.artifactDigest,
+      );
+    }
+    return landed.workflow;
   }
 
   private async resolveApprovals(
@@ -594,6 +695,44 @@ export class FactoryWorkflow {
       } catch (retryError) {
         if (!isWorkflowRevisionConflict(retryError)) throw retryError;
       }
+    }
+  }
+
+  /**
+   * #87: conflict-tolerant success-transition save, mirroring landFailure
+   * (#80) for the happy path. A concurrent writer that saved first makes this
+   * call's optimistic save throw WorkflowRevisionConflictError — never let
+   * that raw conflict surface, and never let it route through the failure
+   * machinery:
+   *   (a) a twin's identical save — same stage, same idempotency-key digest —
+   *       already *is* this call's result (matching the idempotency
+   *       early-return semantics): return the winner's workflow with
+   *       `won: false` so the caller skips its own audit (the winner wrote
+   *       it);
+   *   (b) otherwise the winner made a different transition: throw
+   *       WorkflowRaceLostError, the typed "you lost the race" outcome.
+   * Non-conflict store errors still propagate: a store outage is not a race.
+   */
+  private async saveSuccess(
+    next: WorkflowRecord,
+    expectedRevision: number,
+    idempotencyKey: string,
+  ): Promise<{ workflow: WorkflowRecord; won: boolean }> {
+    try {
+      await this.store.saveWorkflow(next, expectedRevision);
+      return { workflow: next, won: true };
+    } catch (error) {
+      if (!isWorkflowRevisionConflict(error)) throw error;
+      const latest = await this.require(next.workflowId);
+      const marker = next.idempotency[idempotencyKey];
+      if (
+        marker !== undefined &&
+        latest.stage === next.stage &&
+        latest.idempotency[idempotencyKey] === marker
+      ) {
+        return { workflow: latest, won: false };
+      }
+      throw new WorkflowRaceLostError(next.workflowId);
     }
   }
 
