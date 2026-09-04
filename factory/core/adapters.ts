@@ -470,8 +470,8 @@ export const DEFAULT_EXECUTOR_CHECKS: readonly CheckCommand[] = [
   { name: "test", command: "pnpm test" },
 ];
 
-export const DEFAULT_EXECUTOR_MODEL = "anthropic/claude-sonnet-5";
-export const EXECUTOR_DEFAULT_BASE_URL = "https://ai-gateway.vercel.sh/v1";
+export const DEFAULT_EXECUTOR_MODEL = "deepseek-v4-flash";
+export const EXECUTOR_DEFAULT_BASE_URL = "https://api.deepseek.com";
 export const DEFAULT_EXECUTOR_ATTEMPTS = 3;
 /** #68: exactly one repair attempt after failed checks; never more. */
 export const DEFAULT_EXECUTOR_REPAIRS = 1;
@@ -514,9 +514,9 @@ export type ModelGenerate = (params: {
 
 export interface EveNativeOptions {
   sandbox: SandboxHandle;
-  /** AI gateway key used only by the default live generate seam. */
+  /** DeepSeek API key used only by the default live generate seam. */
   apiKey?: string;
-  /** Structured-generation seam; defaults to a live gateway call. */
+  /** Structured-generation seam; defaults to a live model call. */
   generate?: ModelGenerate;
   /** Model for the default live seam; defaults to FACTORY_EXECUTOR_MODEL. */
   model?: string;
@@ -538,7 +538,7 @@ export function resolveExecutorModel(
   return env.FACTORY_EXECUTOR_MODEL ?? DEFAULT_EXECUTOR_MODEL;
 }
 
-/** Live gateway-backed generate seam, mirroring the classifier's adapter. */
+/** Live DeepSeek-backed generate seam, mirroring the classifier's adapter. */
 export async function createLiveExecutorGenerate(options: {
   baseURL?: string;
   apiKey: string;
@@ -731,7 +731,7 @@ export class EveNativeExecutor implements Executor {
     const apiKey = this.options.apiKey;
     if (!apiKey) {
       throw new Error(
-        "eve-native executor requires AI_GATEWAY_API_KEY in the host runtime",
+        "eve-native executor requires DEEPSEEK_API_KEY in the host runtime",
       );
     }
     return createLiveExecutorGenerate({

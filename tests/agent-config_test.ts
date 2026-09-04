@@ -4,14 +4,14 @@ import agent from "@/agent/agent.ts";
 import sandbox from "@/agent/sandbox/sandbox.ts";
 
 describe("agent configuration", () => {
-  it("uses the pinned Vercel AI Gateway model", () => {
-    expect(agent.model.modelId).toBe("openai/gpt-4.1-nano");
+  it("uses the pinned DeepSeek model", () => {
+    expect(agent.model.modelId).toBe("deepseek-v4-flash");
     expect(agent.modelContextWindowTokens).toBe(128_000);
 
     const modelConfig = (
       agent.model as unknown as { config: { provider: string } }
     ).config;
-    expect(modelConfig.provider).toBe("vercel-ai-gateway.chat");
+    expect(modelConfig.provider).toBe("deepseek.chat");
   });
 
   it("uses the Vercel sandbox backend", () => {

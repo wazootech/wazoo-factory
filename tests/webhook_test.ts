@@ -329,7 +329,7 @@ describe("createRouteHandler", () => {
       allowedRepos: [],
       onProcess: async () => {},
       verifyReady: () => {
-        throw new Error("classifier requires AI_GATEWAY_API_KEY");
+        throw new Error("classifier requires DEEPSEEK_API_KEY");
       },
     });
     const a = args();

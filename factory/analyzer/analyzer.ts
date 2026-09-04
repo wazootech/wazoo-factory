@@ -46,7 +46,7 @@ export async function analyzeIssue(
   const input = AnalysisInput.parse(rawInput);
 
   // Resolve the seam once, before any retry: deterministic setup errors (a
-  // missing gateway key) can never succeed on a later attempt, so they must
+  // missing API key) can never succeed on a later attempt, so they must
   // surface immediately rather than burn the attempt/backoff budget.
   deps.resolveEnv?.();
 
@@ -118,16 +118,11 @@ export interface ResolvedLiveAnalyzer {
 export function resolveLiveAnalyzerEnv(
   env: {
     DEEPSEEK_API_KEY?: string;
-    AI_GATEWAY_API_KEY?: string;
-    OPENCODE_GO_API_KEY?: string;
     ANALYZER_MODEL?: string;
     ANALYZER_BASE_URL?: string;
   } = process.env,
 ): ResolvedLiveAnalyzer {
-  // DeepSeek direct is the prod default; the gateway keys remain as
-  // fallbacks for hosts that explicitly point ANALYZER_BASE_URL there.
-  const apiKey =
-    env.DEEPSEEK_API_KEY ?? env.AI_GATEWAY_API_KEY ?? env.OPENCODE_GO_API_KEY;
+  const apiKey = env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     throw new Error("analyzer requires DEEPSEEK_API_KEY in the host runtime");
   }
@@ -138,7 +133,7 @@ export function resolveLiveAnalyzerEnv(
   };
 }
 
-// Live adapter over an OpenAI-compatible gateway using generateText +
+// Live adapter over an OpenAI-compatible endpoint using generateText +
 // Output.object(), mirroring the classifier's adapter. Requires credentials
 // at runtime by construction, so it stays out of unit tests.
 export async function createLiveGenerate(

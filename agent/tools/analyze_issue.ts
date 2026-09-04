@@ -12,7 +12,7 @@ import { AnalysisInput } from "@/factory/analyzer/schema.ts";
 // the host runtime; the adapter is built lazily on first use so `eve dev`
 // still boots without one configured (mirroring classify_issue wiring).
 //
-// Default model anthropic/claude-sonnet-5 via Vercel AI Gateway. Set
+// Default model deepseek-v4-flash via DeepSeek's official API. Set
 // ANALYZER_MODEL to escape-hatch onto a different model without code changes.
 
 const liveDeps = createLazyLiveDeps();
