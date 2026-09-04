@@ -1,0 +1,132 @@
+{
+  "modelId": "minimax/minimax-m3",
+  "ranAt": "2026-09-04T02:57:08.712Z",
+  "gateSummary": {
+    "gate": 0.8,
+    "total": 12,
+    "atOrAbove": 11,
+    "below": 1
+  },
+  "predictions": [
+    {
+      "id": "linked-markdown-py-2",
+      "repository": "wazootech/linked-markdown-py",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.9,
+        "rationale": "The ticket requests publishing a new package to PyPI for the first time and adding release workflow configuration — a new capability and routine CI/release engineering work, not a defect. Build/config artifacts (release workflow, packaging) change."
+      }
+    },
+    {
+      "id": "linked-markdown-11",
+      "repository": "wazootech/linked-markdown",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.82,
+        "rationale": "The ticket requests replacing a custom regex with the `python-frontmatter` library and aligning idiomatic dependencies across implementations. This is an enhancement/refactor (code and dependency changes) with no documented defect in the current regex behavior."
+      }
+    },
+    {
+      "id": "worlds-api-46",
+      "repository": "wazootech/worlds-api",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.9,
+        "rationale": "The issue requests wiring an existing `SparqlRequest.signal` capability (already supported in the engine and client libraries) into the API route, along with bumping a dependency version and handling the abort path. There is no claim that existing behavior is broken or contrary to documented intent; this is enhancement of the route to support client-disconnect cancellation."
+      }
+    },
+    {
+      "id": "worlds-cloudflare-24",
+      "repository": "wazootech/worlds-cloudflare",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.82,
+        "rationale": "This is a deliberate refactor/adoption of a shared upstream package to remove duplicated code—no documented behavior is broken and no new user-facing capability is added; routine deduplication work counts as feature per the rules."
+      }
+    },
+    {
+      "id": "worlds-indexeddb-9",
+      "repository": "wazootech/worlds-indexeddb",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.95,
+        "rationale": "The ticket requests adding a new convenience export entrypoint (`@worlds/indexeddb/testing`) that re-exports a polyfill, a clear new capability. Nothing is broken or behaving contrary to documented intent; this is a packaging/API enhancement to improve developer experience for Deno consumers."
+      }
+    },
+    {
+      "id": "wiki-templates-39",
+      "repository": "wazootech/wiki-templates",
+      "gold": "docs",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.95,
+        "rationale": "The issue proposes adding a new template artifact (`workspace-cli` under `wiki-templates/`) that demonstrates a new capability—composing independently-owned sub-wikis into a workspace. No existing behavior is broken; this is a new feature/integration template building on existing Wiki CLI functionality."
+      }
+    },
+    {
+      "id": "worlds-client-ts-3",
+      "repository": "wazootech/worlds-client-ts",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.78,
+        "rationale": "The ticket describes a planned change to the fallback URL in `scripts/sync-openapi.ts` and redeploying a spec — a new capability/config tweak gated by syncing prod. No current behavior is broken at HEAD (the broken state was already reverted); the work is a coordinated enhancement to remove a raw.githubusercontent dependency."
+      }
+    },
+    {
+      "id": "linked-markdown-10",
+      "repository": "wazootech/linked-markdown",
+      "gold": "docs",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.85,
+        "rationale": "The changes modify specification documentation (spec/index.md, glossary), conformance test fixtures, and manifest metadata. The deliverable is updated written specifications and test fixture files, not runtime code. The work streamlines and clarifies the documented spec rather than fixing broken behavior."
+      }
+    },
+    {
+      "id": "wazoo-api-36",
+      "repository": "wazootech/wazoo-api",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.9,
+        "rationale": "The ticket requests replacing hand-rolled raw fetch calls with a generated type-safe client library (@worlds/client). This is a refactor/enhancement of transport-layer code — there is no claim of broken behavior, incorrect results, or a regression. It is a code/dependency change to adopt a new client library, which is a feature."
+      }
+    },
+    {
+      "id": "wazoo-console-57",
+      "repository": "wazootech/wazoo-console",
+      "gold": "feature",
+      "prediction": {
+        "category": "feature",
+        "confidence": 0.9,
+        "rationale": "The ticket requests adding new UI elements (privacy policy and terms links alongside a data-collection statement) on the sign-in screen. There is no indication that existing behavior is broken or that the current signup flow crashes or misbehaves; this is a new capability driven by a legal/compliance need. Since runtime UI code changes are required, it is not docs."
+      }
+    },
+    {
+      "id": "wazoo.dev-6",
+      "repository": "wazootech/wazoo.dev",
+      "gold": "docs",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.95,
+        "rationale": "The issue requests the creation of a design document (design.md), which is a written artifact, fitting the docs category."
+      }
+    },
+    {
+      "id": "wiki-249",
+      "repository": "wazootech/wiki",
+      "gold": "docs",
+      "prediction": {
+        "category": "docs",
+        "confidence": 0.95,
+        "rationale": "The ticket's deliverable is a change to a skill/policy document (`skills/wiki-sync/SKILL.md`) governing how wiki documentation is written and synced. It proposes rewriting documentation policy defaults and adding an opt-in mode, not changing runtime code."
+      }
+    }
+  ]
+}
