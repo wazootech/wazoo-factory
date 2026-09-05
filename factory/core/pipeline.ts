@@ -60,6 +60,13 @@ export interface PipelineIssueInput {
   labels: string[];
   /** Candidate issue association recorded on the plan (searchIssues fallback). */
   url: string;
+  /**
+   * Pruned source-layout snapshot at the change's base revision, fed to the
+   * analyzer so affectedFiles/spec name exact paths (pages, routes, modules)
+   * instead of only issue-named files. Optional: absent callers run the
+   * analyzer with issue text alone, as today.
+   */
+  fileTree?: string[];
 }
 
 export interface PipelineApprovals {
@@ -188,6 +195,7 @@ export class FactoryPipeline {
       const analysis = await analyzeIssue(analyze, {
         repository: issue.repository,
         repositoryDescription: issue.repositoryDescription,
+        fileTree: issue.fileTree ?? [],
         issueNumber: issue.issueNumber,
         title: issue.title,
         body: issue.body,
