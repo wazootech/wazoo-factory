@@ -27,26 +27,46 @@ export type GoldAnalysis = z.infer<typeof GoldAnalysis>;
 // analyzer alone, never confounded with the classifier it composes with — so
 // each case carries its classification here, and the live run feeds it
 // verbatim as AnalysisInput.classification.
-export const AnalyzerCaseFile = z.object({
-  id: z.string().min(1).max(80),
-  repository: z.string().min(1).max(200),
-  issueNumber: z.number().int().positive(),
-  title: z.string().min(1).max(200),
-  body: z.string().max(10_000).default(""),
-  url: z.string().url(),
-  repositoryDescription: z.string().max(500).default(""),
-  // Pruned source-layout snapshot captured at the change's base revision so
-  // the live run gives the analyzer the same repository context production
-  // would. `fileTreeRevision` records which commit the snapshot came from.
-  fileTree: FileTreePaths.default([]),
-  fileTreeRevision: z.string().min(1).max(40).optional(),
-  legacyLabels: z.array(z.string().max(50)).default([]),
-  classification: z.object({
-    category: IssueCategory,
-    confidence: z.number().min(0).max(1),
-  }),
-  gold: GoldAnalysis.optional(),
-});
+
+// Where a fixture's source-layout snapshot was captured from. "base" is the
+// change's pre-merge revision (the default: the layout is what the analyzer
+// would see in production before the change exists). "post-base" marks a
+// deliberate later capture — e.g. a sibling branch's head merged just before
+// the resolution — so body-referenced files that never existed at base (like
+// wazoo-api-38's `src/lib/worlds-client.ts`, landed via PR #37) still appear
+// in the layout. Post-base captures must record `fileTreeRevision`.
+export const FileTreeCapture = z.enum(["base", "post-base"]);
+export type FileTreeCapture = z.infer<typeof FileTreeCapture>;
+
+export const AnalyzerCaseFile = z
+  .object({
+    id: z.string().min(1).max(80),
+    repository: z.string().min(1).max(200),
+    issueNumber: z.number().int().positive(),
+    title: z.string().min(1).max(200),
+    body: z.string().max(10_000).default(""),
+    url: z.string().url(),
+    repositoryDescription: z.string().max(500).default(""),
+    // Pruned source-layout snapshot so the live run gives the analyzer the same
+    // repository context production would. `fileTreeRevision` records which
+    // commit the snapshot came from; `fileTreeCapture` records whether that
+    // commit is the change's base revision or a post-base revision (see above).
+    fileTree: FileTreePaths.default([]),
+    fileTreeRevision: z.string().min(1).max(40).optional(),
+    fileTreeCapture: FileTreeCapture.default("base"),
+    legacyLabels: z.array(z.string().max(50)).default([]),
+    classification: z.object({
+      category: IssueCategory,
+      confidence: z.number().min(0).max(1),
+    }),
+    gold: GoldAnalysis.optional(),
+  })
+  .refine(
+    (kase) =>
+      kase.fileTreeCapture !== "post-base" ||
+      kase.fileTreeRevision !== undefined,
+    { message: "post-base fileTree captures must record fileTreeRevision" },
+  );
 export type AnalyzerCaseFile = z.infer<typeof AnalyzerCaseFile>;
 
 export const AnalyzerCasesFile = z.object({

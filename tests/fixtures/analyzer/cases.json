@@ -44,6 +44,7 @@
         "src/lib/scopes.ts",
         "src/lib/sheets-auth.ts",
         "src/lib/usage.ts",
+        "src/lib/worlds-client.ts",
         "src/routes/auth.ts",
         "src/routes/billing.ts",
         "src/routes/health.ts",
@@ -63,7 +64,8 @@
         "vitest.config.ts",
         "wrangler.toml"
       ],
-      "fileTreeRevision": "4efc0a10fd799427d7ac5cf69ab328061b99d0cc"
+      "fileTreeRevision": "4e198efcb85860df01cd0bdeec15988d1903d76d",
+      "fileTreeCapture": "post-base"
     },
     {
       "id": "sparql-engine-185",
