@@ -47,8 +47,19 @@ export function createSchemaValidatedAnalyzer(
 // Analyzer isolation (#89): feed the case's ratified classification verbatim
 // as AnalysisInput.classification, so the measured quality is the analyzer's —
 // never confounded with the classifier the pipeline composes it with.
+export interface MapCaseOptions {
+  /**
+   * When false, drop the captured source layout so the prompt renders without
+   * the `## Repository source layout` section. This is the ablation arm of the
+   * tree-context measurement: the live eval runs every case both ways so the
+   * affected-files recall delta between the two configs is observable.
+   */
+  includeFileTree?: boolean;
+}
+
 export function mapCaseToAnalysisInput(
   kase: AnalyzerCaseFile,
+  options: MapCaseOptions = {},
 ): z.infer<typeof AnalysisInput> {
   return AnalysisInput.parse({
     issueNumber: kase.issueNumber,
@@ -57,7 +68,7 @@ export function mapCaseToAnalysisInput(
     labels: kase.legacyLabels,
     repository: kase.repository,
     repositoryDescription: kase.repositoryDescription,
-    fileTree: kase.fileTree,
+    fileTree: options.includeFileTree === false ? [] : kase.fileTree,
     classification: kase.classification,
   });
 }
