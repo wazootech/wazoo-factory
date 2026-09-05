@@ -1,9 +1,12 @@
-// Repository source-layout capture (#__): turns a recursive git tree into the
-// pruned path listing fixture cases embed. Each snapshot is captured at the
-// change's base revision (the closing PR's pre-merge head), so the analyzer
+// Repository source-layout capture (#95): turns a recursive git tree into the
+// pruned path listing fixture cases embed. Snapshots are captured at the
+// change's base revision (the closing PR's pre-merge head) so the analyzer
 // can resolve issue-described surfaces to exact paths — which is what lets
-// affected-files gold tighten to full landed change sets. Rendering into the
-// prompt lives in factory/analyzer/prompt.ts; this module owns capture only.
+// affected-files gold tighten to full landed change sets. A case may opt into
+// a post-base capture (fileTreeCapture: "post-base", see the eval schema)
+// when the issue body references files a sibling branch merged before the
+// resolution, so those files appear in the layout. Rendering into the prompt
+// lives in factory/analyzer/prompt.ts; this module owns capture only.
 //
 // Pruning intent: keep the layout a technical analyst needs (source, colocated
 // tests, test harnesses, manifests) and drop what a spec never names —
