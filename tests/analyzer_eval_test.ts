@@ -228,6 +228,17 @@ describe("analyzer eval isolation feed", () => {
     );
     expect(input.fileTree).toEqual(["src/a.ts", "src/a.test.ts"]);
   });
+
+  it("drops the source layout for the no-tree ablation arm", () => {
+    const input = mapCaseToAnalysisInput(
+      AnalyzerCaseFile.parse({
+        ...baseCase,
+        fileTree: ["src/a.ts", "src/a.test.ts"],
+      }),
+      { includeFileTree: false },
+    );
+    expect(input.fileTree).toEqual([]);
+  });
 });
 
 describe("analyzer eval source-layout capture", () => {
@@ -316,5 +327,51 @@ describe("analyzer eval report", () => {
     expect(markdown).toContain("Mean score: 100.0%");
     expect(markdown).toContain("- `c1`: recall=1.00");
     expect(markdown).toContain("spec: must keep authz unchanged");
+  });
+
+  it("renders the tree-context comparison when a baseline is provided", () => {
+    const report = scoreAnalysis([
+      { id: "c1", gold, prediction: analysis() },
+      {
+        id: "c2",
+        gold: GoldAnalysis.parse({
+          affectedFiles: ["src/a.ts", "src/b.ts"],
+          riskLevel: "low",
+          estimatedComplexity: "simple",
+        }),
+        prediction: analysis({ affectedFiles: ["src/a.ts"] }),
+      },
+    ]);
+    const baseline = scoreAnalysis([
+      {
+        id: "c1",
+        gold,
+        prediction: analysis({ affectedFiles: ["src/missed.ts"] }),
+      },
+      {
+        id: "c2",
+        gold: GoldAnalysis.parse({
+          affectedFiles: ["src/a.ts", "src/b.ts"],
+          riskLevel: "low",
+          estimatedComplexity: "simple",
+        }),
+        prediction: analysis({ affectedFiles: ["src/a.ts"] }),
+      },
+    ]);
+    const markdown = renderReport({
+      modelId: "deepseek-v4-flash",
+      ranAt: new Date("2026-09-04T00:00:00.000Z"),
+      report,
+      baseline,
+    });
+    expect(markdown).toContain(
+      "## Tree-context comparison (with layout vs without)",
+    );
+    expect(markdown).toContain("| case | recall with | recall without | Δ |");
+    // c1: 1.00 with layout vs 0.00 without → +1.00
+    expect(markdown).toContain("| `c1` | 1.00 | 0.00 | +1.00 |");
+    // c2: 0.50 on both sides → 0.00 (no sign for a zero delta)
+    expect(markdown).toContain("| `c2` | 0.50 | 0.50 | 0.00 |");
+    expect(markdown).toContain("Recall moved: 1 helped · 0 hurt · 1 unchanged");
   });
 });

@@ -10,6 +10,12 @@ export interface RenderReportInput {
   modelId: string;
   ranAt: Date;
   report: ScoreReport;
+  /**
+   * Ablation run without the source layout, rendered as a comparison so the
+   * live eval can measure whether repository context moves affected-files
+   * recall instead of relying on a single configuration.
+   */
+  baseline?: ScoreReport;
   /** Free-text rubric guidance from the gold cases, surfaced for the reader. */
   rubrics?: RubricSample[];
 }
@@ -57,6 +63,10 @@ export function renderReport(input: RenderReportInput): string {
     lines.push("");
   }
 
+  if (input.baseline) {
+    lines.push(...renderComparison(report, input.baseline));
+  }
+
   if (input.rubrics?.length) {
     lines.push("## Rubric guidance");
     for (const item of input.rubrics) {
@@ -70,4 +80,65 @@ export function renderReport(input: RenderReportInput): string {
   }
 
   return lines.join("\n");
+}
+
+// Per-case affected-files recall with vs without the source layout, plus the
+// headline deltas. Cases absent from a side (that config failed every attempt)
+// render as n/a and are excluded from the helped/hurt/unchanged counts.
+function renderComparison(
+  primary: ScoreReport,
+  baseline: ScoreReport,
+): string[] {
+  const lines: string[] = [];
+  const baselineById = new Map(baseline.cases.map((c) => [c.id, c]));
+  const recallDelta =
+    primary.meanAffectedFilesRecall - baseline.meanAffectedFilesRecall;
+  const scoreDelta = primary.meanScore - baseline.meanScore;
+  let helped = 0;
+  let hurt = 0;
+  let unchanged = 0;
+  const rows: string[] = [];
+
+  for (const item of primary.cases) {
+    const base = baselineById.get(item.id);
+    if (!base) {
+      rows.push(
+        `| \`${item.id}\` | ${item.affectedFilesRecall.toFixed(2)} | n/a | n/a |`,
+      );
+      continue;
+    }
+    const delta = item.affectedFilesRecall - base.affectedFilesRecall;
+    if (delta > 0) helped++;
+    else if (delta < 0) hurt++;
+    else unchanged++;
+    rows.push(
+      `| \`${item.id}\` | ${item.affectedFilesRecall.toFixed(2)} | ` +
+        `${base.affectedFilesRecall.toFixed(2)} | ` +
+        `${delta > 0 ? "+" : ""}${delta.toFixed(2)} |`,
+    );
+  }
+
+  lines.push("## Tree-context comparison (with layout vs without)");
+  lines.push(
+    `- Mean affected-files recall: ${pct(primary.meanAffectedFilesRecall)} ` +
+      `with layout · ${pct(baseline.meanAffectedFilesRecall)} without · ` +
+      `**${signPts(recallDelta)}**`,
+  );
+  lines.push(
+    `- Recall moved: ${helped} helped · ${hurt} hurt · ${unchanged} unchanged`,
+  );
+  lines.push(
+    `- Mean score: ${pct(primary.meanScore)} with layout · ` +
+      `${pct(baseline.meanScore)} without · **${signPts(scoreDelta)}**`,
+  );
+  lines.push("");
+  lines.push("| case | recall with | recall without | Δ |");
+  lines.push("| --- | --- | --- | --- |");
+  for (const row of rows) lines.push(row);
+  lines.push("");
+  return lines;
+}
+
+function signPts(delta: number): string {
+  return `${delta >= 0 ? "+" : ""}${(delta * 100).toFixed(1)} pts`;
 }
